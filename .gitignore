@@ -73,4 +73,8 @@ Icon
 Network Trash Folder
 Temporary Items
 .apdisk
+
+# General
 bin/
+token.json
+.envrc
