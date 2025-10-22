@@ -92,7 +92,10 @@ var listCompaniesCmd = &cli.Command{
 			TokenFile:    "token.json", // TODO: make configurable
 			LocalAddr:    ":3485",
 		}
-		oauth2Mngr := &oauth2kit.Manager{Config: config}
+		oauth2Mngr := &oauth2kit.Manager{
+			Config: config,
+			Writer: os.Stderr,
+		}
 		httpClient, err := oauth2Mngr.NewOAuth2Client(ctx)
 		if err != nil {
 			return fmt.Errorf("create oauth2 client: %w", err)
@@ -167,7 +170,10 @@ var listFilesCmd = &cli.Command{
 			Scopes:       []string{"read", "write"},
 			TokenFile:    "token.json", // TODO: make configurable
 		}
-		oauth2Mngr := &oauth2kit.Manager{Config: config}
+		oauth2Mngr := &oauth2kit.Manager{
+			Config: config,
+			Writer: os.Stderr,
+		}
 		httpClient, err := oauth2Mngr.NewOAuth2Client(ctx)
 		if err != nil {
 			return fmt.Errorf("create oauth2 client: %w", err)
