@@ -62,6 +62,47 @@ func ptr[T any](v T) *T {
 	return &v
 }
 
+// newOAuth2HTTPClient creates an HTTP client with OAuth2 authentication configured
+func newOAuth2HTTPClient(ctx context.Context, cmd *cli.Command) (*http.Client, error) {
+	if !cmd.IsSet(FlagOauth2ClientID.Name) || !cmd.IsSet(FlagOauth2ClientSecret.Name) {
+		return nil, fmt.Errorf("client-id and client-secret must be set")
+	}
+
+	config := oauth2kit.Config{
+		ClientID:     cmd.String(FlagOauth2ClientID.Name),
+		ClientSecret: cmd.String(FlagOauth2ClientSecret.Name),
+		Endpoint:     freeeoauth2endpoint,
+		Scopes:       []string{"read", "write"},
+		TokenFile:    "token.json", // TODO: make configurable
+		LocalAddr:    ":3485",
+	}
+
+	oauth2Mngr := &oauth2kit.Manager{
+		Config: config,
+		Writer: os.Stderr,
+	}
+
+	httpClient, err := oauth2Mngr.NewOAuth2Client(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("create oauth2 client: %w", err)
+	}
+
+	return httpClient, nil
+}
+
+// newFreeeAPIClient creates a freee API client with the given HTTP client
+func newFreeeAPIClient(httpClient *http.Client) (*freeeapi.ClientWithResponses, error) {
+	client, err := freeeapi.NewClientWithResponses(
+		freeeapiEndpoint,
+		freeeapi.WithHTTPClient(httpClient),
+		// TODO: add options...
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create freeeapi client: %w", err)
+	}
+	return client, nil
+}
+
 var cmd = &cli.Command{
 	Name:    "ffbox",
 	Usage:   "A command-line tool for managing freee filebox files",
@@ -82,34 +123,15 @@ var listCompaniesCmd = &cli.Command{
 	Usage: "自身の利用可能な freee 事業所を一覧表示する",
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		// Prepare OAuth2 client
-		// TODO: Before フックで準備するようにする
-		if !cmd.IsSet(FlagOauth2ClientID.Name) || !cmd.IsSet(FlagOauth2ClientSecret.Name) {
-			return fmt.Errorf("client-id and client-secret must be set")
-		}
-		config := oauth2kit.Config{
-			ClientID:     cmd.String(FlagOauth2ClientID.Name),
-			ClientSecret: cmd.String(FlagOauth2ClientSecret.Name),
-			Endpoint:     freeeoauth2endpoint,
-			Scopes:       []string{"read", "write"},
-			TokenFile:    "token.json", // TODO: make configurable
-			LocalAddr:    ":3485",
-		}
-		oauth2Mngr := &oauth2kit.Manager{
-			Config: config,
-			Writer: os.Stderr,
-		}
-		httpClient, err := oauth2Mngr.NewOAuth2Client(ctx)
+		httpClient, err := newOAuth2HTTPClient(ctx, cmd)
 		if err != nil {
-			return fmt.Errorf("create oauth2 client: %w", err)
+			return err
 		}
 
 		// Prepare freeeapi client
-		freeeapiClient, err := freeeapi.NewClientWithResponses(freeeapiEndpoint,
-			freeeapi.WithHTTPClient(httpClient),
-			// TODO: add options...
-		)
+		freeeapiClient, err := newFreeeAPIClient(httpClient)
 		if err != nil {
-			return fmt.Errorf("create freeeapi client: %w", err)
+			return err
 		}
 
 		// List companies
@@ -161,33 +183,15 @@ var listFilesCmd = &cli.Command{
 		}
 
 		// Prepare OAuth2 client
-		// TODO: Before フックで準備するようにする
-		if !cmd.IsSet(FlagOauth2ClientID.Name) || !cmd.IsSet(FlagOauth2ClientSecret.Name) {
-			return fmt.Errorf("client-id and client-secret must be set")
-		}
-		config := oauth2kit.Config{
-			ClientID:     cmd.String(FlagOauth2ClientID.Name),
-			ClientSecret: cmd.String(FlagOauth2ClientSecret.Name),
-			Endpoint:     freeeoauth2endpoint,
-			Scopes:       []string{"read", "write"},
-			TokenFile:    "token.json", // TODO: make configurable
-		}
-		oauth2Mngr := &oauth2kit.Manager{
-			Config: config,
-			Writer: os.Stderr,
-		}
-		httpClient, err := oauth2Mngr.NewOAuth2Client(ctx)
+		httpClient, err := newOAuth2HTTPClient(ctx, cmd)
 		if err != nil {
-			return fmt.Errorf("create oauth2 client: %w", err)
+			return err
 		}
 
 		// Prepare freeeapi client
-		freeeapiClient, err := freeeapi.NewClientWithResponses(freeeapiEndpoint,
-			freeeapi.WithHTTPClient(httpClient),
-			// TODO: add options...
-		)
+		freeeapiClient, err := newFreeeAPIClient(httpClient)
 		if err != nil {
-			return fmt.Errorf("create freeeapi client: %w", err)
+			return err
 		}
 
 		// Sample: List receipts

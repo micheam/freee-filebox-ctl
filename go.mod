@@ -5,7 +5,7 @@ go 1.25.2
 tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
 
 require (
-	github.com/micheam/go-oauth2kit v0.0.0-20251022042458-5c9a45db3c02
+	github.com/micheam/go-oauth2kit v0.0.1
 	github.com/oapi-codegen/runtime v1.1.2
 	github.com/urfave/cli/v3 v3.5.0
 	golang.org/x/oauth2 v0.32.0

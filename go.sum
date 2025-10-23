@@ -57,6 +57,8 @@ github.com/micheam/go-oauth2kit v0.0.0-20251022041331-5660fc7bc008 h1:Jydwwq9g6w
 github.com/micheam/go-oauth2kit v0.0.0-20251022041331-5660fc7bc008/go.mod h1:YiNMlPDknRJ1NkMRjN+q+FfmG6lBQMPqj2Ss73O41pI=
 github.com/micheam/go-oauth2kit v0.0.0-20251022042458-5c9a45db3c02 h1:ovDB31QQW3F/srmW6XQywDIIzMk1XqcmE/Ag9pINMqw=
 github.com/micheam/go-oauth2kit v0.0.0-20251022042458-5c9a45db3c02/go.mod h1:YiNMlPDknRJ1NkMRjN+q+FfmG6lBQMPqj2Ss73O41pI=
+github.com/micheam/go-oauth2kit v0.0.1 h1:ZRqtFGIabGbNPPsDyPoSkPzu7ucrJ1dHf9J1MteqvMs=
+github.com/micheam/go-oauth2kit v0.0.1/go.mod h1:YiNMlPDknRJ1NkMRjN+q+FfmG6lBQMPqj2Ss73O41pI=
 github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 h1:RWengNIwukTxcDr9M+97sNutRR1RKhG96O6jWumTTnw=
 github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826/go.mod h1:TaXosZuwdSHYgviHp1DAtfrULt5eUgsSMsZf+YrPgl8=
 github.com/nxadm/tail v1.4.4/go.mod h1:kenIhsEOeOJmVchQTgglprH7qJGnHDVpk1VPCcaMI8A=
