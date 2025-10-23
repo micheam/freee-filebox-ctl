@@ -16,7 +16,9 @@ import (
 	oauth2kit "github.com/micheam/go-oauth2kit"
 )
 
-var version = "0.1.0"
+// version is set via ldflags during build
+// Default: "dev" for local development builds
+var version = "dev"
 
 func main() {
 	ctx := context.Background()
