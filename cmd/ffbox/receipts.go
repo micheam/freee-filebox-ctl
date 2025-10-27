@@ -20,9 +20,10 @@ var cmdReceiptsList = &cli.Command{
 	Category: "receipts",
 	Flags: []cli.Flag{
 		&cli.Int64Flag{
-			Name:  "limit",
-			Usage: "取得するファイルの最大件数",
-			Value: 100,
+			Name:    "limit",
+			Aliases: []string{"n"},
+			Usage:   "取得するファイルの最大件数",
+			Value:   100,
 		},
 		// TODO: 他のフィルタリングオプションも追加する
 		//       freshness, start_date, end_date, updated_since など
