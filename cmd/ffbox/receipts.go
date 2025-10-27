@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/urfave/cli/v3"
 
 	freeeapigen "github.com/micheam/freee-filebox-ctl/freeeapi/gen"
+	"github.com/micheam/freee-filebox-ctl/internal/formatter"
 )
 
 var cmdReceiptsList = &cli.Command{
@@ -76,8 +78,14 @@ var cmdReceiptShow = &cli.Command{
 	Name:      "show",
 	Usage:     "指定したIDの証憑ファイルの情報を表示します",
 	ArgsUsage: "[ids...]",
-	Flags:     []cli.Flag{},
-	Before:    loadAppConfig,
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "format",
+			Usage: "出力フォーマット (table, json)",
+			Value: "table",
+		},
+	},
+	Before: loadAppConfig,
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		companyID, err := detectCompanyID(ctx, cmd)
 		if err != nil {
@@ -100,7 +108,9 @@ var cmdReceiptShow = &cli.Command{
 			}
 			ids = append(ids, id)
 		}
-		for _, id := range ids { // NOTE: とりあえず直列で取得している
+
+		format := cmd.String("format")
+		for i, id := range ids { // NOTE: とりあえず直列で取得している
 			params := &freeeapigen.GetReceiptParams{CompanyId: companyID}
 			resp, err := freeeapiClient.GetReceiptWithResponse(ctx, id, params)
 			if err != nil {
@@ -109,11 +119,25 @@ var cmdReceiptShow = &cli.Command{
 			switch resp.StatusCode() {
 			case http.StatusOK:
 				r := resp.JSON200
-				b, err := json.Marshal(r.Receipt)
-				if err != nil {
-					return fmt.Errorf("marshal receipt ID %d: %w", id, err)
+				if format == "json" {
+					b, err := json.Marshal(r.Receipt)
+					if err != nil {
+						return fmt.Errorf("marshal receipt ID %d: %w", id, err)
+					}
+					fmt.Println(string(b))
+				} else {
+					// Default: table format
+					f := formatter.NewReceipt(os.Stdout)
+					if err := f.Format(&r.Receipt); err != nil {
+						return fmt.Errorf("format receipt ID %d: %w", id, err)
+					}
+					// Add separator between multiple receipts
+					if i < len(ids)-1 {
+						fmt.Println()
+						fmt.Println("---")
+						fmt.Println()
+					}
 				}
-				fmt.Println(string(b))
 			default:
 				return fmt.Errorf("got unexpected response for receipt ID %d: %s", id, resp.Status())
 			}
