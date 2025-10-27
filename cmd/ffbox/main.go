@@ -2,26 +2,61 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
-	"strconv"
-	"time"
 
 	"github.com/urfave/cli/v3"
-	"golang.org/x/oauth2"
 
-	cmdconfig "github.com/micheam/freee-filebox-ctl/cmd/ffbox/config"
-	freeeapi "github.com/micheam/freee-filebox-ctl/freeeapi/gen"
+	freeeapi "github.com/micheam/freee-filebox-ctl/freeeapi"
 	"github.com/micheam/freee-filebox-ctl/internal/config"
 
 	oauth2kit "github.com/micheam/go-oauth2kit"
 )
 
-// version is set via ldflags during build
-// Default: "dev" for local development builds
-var version = "dev"
+var (
+	// version is set via ldflags during build
+	// Default: "dev" for local development builds
+	version = "dev"
+
+	// app is the main CLI application
+	app = &cli.Command{
+		Name:    "ffbox",
+		Usage:   "freee会計の ファイルボックス を操作します",
+		Version: version,
+		Flags: []cli.Flag{
+			flagOauth2ClientID,
+			flagOauth2ClientSecret,
+			flagCompanyID,
+		},
+		Commands: []*cli.Command{
+			listFilesCmd,
+			listCompaniesCmd,
+			{
+				Name:     "config",
+				Usage:    "CLIの設定を管理します",
+				Commands: cmdConfig,
+			},
+		},
+	}
+
+	flagOauth2ClientID = &cli.StringFlag{
+		Name:    "client-id",
+		Usage:   "OAuth2 Client ID",
+		Sources: cli.EnvVars("FREEEAPI_OAUTH2_CLIENT_ID"),
+	}
+	flagOauth2ClientSecret = &cli.StringFlag{
+		Name:    "client-secret",
+		Usage:   "OAuth2 Client Secret",
+		Sources: cli.EnvVars("FREEEAPI_OAUTH2_CLIENT_SECRET"),
+	}
+	flagCompanyID = &cli.StringFlag{
+		Name:    "company-id",
+		Usage:   "Freee Company ID",
+		Sources: cli.EnvVars("FREEEAPI_COMPANY_ID"),
+	}
+
+	freeeapiEndpoint = "https://api.freee.co.jp/"
+)
 
 func main() {
 	ctx := context.Background()
@@ -31,224 +66,43 @@ func main() {
 	}
 }
 
-var (
-	FlagOauth2ClientID = &cli.StringFlag{
-		Name:    "client-id",
-		Usage:   "OAuth2 Client ID",
-		Sources: cli.EnvVars("FREEEAPI_OAUTH2_CLIENT_ID"),
-	}
-	FlagOauth2ClientSecret = &cli.StringFlag{
-		Name:    "client-secret",
-		Usage:   "OAuth2 Client Secret",
-		Sources: cli.EnvVars("FREEEAPI_OAUTH2_CLIENT_SECRET"),
-	}
-	FlagCompanyID = &cli.StringFlag{
-		Name:    "company-id",
-		Usage:   "Freee Company ID",
-		Sources: cli.EnvVars("FREEEAPI_COMPANY_ID"),
-	}
-
-	freeeoauth2endpoint = oauth2.Endpoint{
-		AuthURL:  "https://accounts.secure.freee.co.jp/public_api/authorize",
-		TokenURL: "https://accounts.secure.freee.co.jp/public_api/token",
-	}
-
-	freeeapiEndpoint = "https://api.freee.co.jp/"
-)
-
-const (
-	defaultLimit int64 = 100
-)
+// misc helper functions --------------------------------------------------------------------------------------------------------
 
 func ptr[T any](v T) *T {
 	return &v
 }
 
-// newOAuth2HTTPClient creates an HTTP client with OAuth2 authentication configured
-func newOAuth2HTTPClient(ctx context.Context, cmd *cli.Command) (*http.Client, error) {
-	appConfig := config.FromContext(ctx)
+func deref[T any](p *T, defaultValue T) T {
+	if p != nil {
+		return *p
+	}
+	return defaultValue
+}
 
-	if !cmd.IsSet(FlagOauth2ClientID.Name) || !cmd.IsSet(FlagOauth2ClientSecret.Name) {
+func prepareFreeeAPIClient(ctx context.Context, cmd *cli.Command) (*freeeapi.Client, error) {
+	// Prepare OAuth2 HTTP client
+	appConfig := config.FromContext(ctx)
+	if !cmd.IsSet(flagOauth2ClientID.Name) || !cmd.IsSet(flagOauth2ClientSecret.Name) {
 		return nil, fmt.Errorf("client-id and client-secret must be set")
 	}
 
 	oauth2Config := oauth2kit.Config{
-		ClientID:     cmd.String(FlagOauth2ClientID.Name),
-		ClientSecret: cmd.String(FlagOauth2ClientSecret.Name),
-		Endpoint:     freeeoauth2endpoint,
+		ClientID:     cmd.String(flagOauth2ClientID.Name),
+		ClientSecret: cmd.String(flagOauth2ClientSecret.Name),
+		Endpoint:     freeeapi.Oauth2Endpoint(),
 		Scopes:       []string{"read", "write"},
 		TokenFile:    appConfig.OAuth2.TokenFile,
 		LocalAddr:    appConfig.OAuth2.LocalAddr,
 	}
-
 	oauth2Mngr := &oauth2kit.Manager{
 		Config: oauth2Config,
 		Writer: os.Stderr,
 	}
-
 	httpClient, err := oauth2Mngr.NewOAuth2Client(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("create oauth2 client: %w", err)
 	}
 
-	return httpClient, nil
-}
-
-// newFreeeAPIClient creates a freee API client with the given HTTP client
-func newFreeeAPIClient(httpClient *http.Client) (*freeeapi.ClientWithResponses, error) {
-	client, err := freeeapi.NewClientWithResponses(
-		freeeapiEndpoint,
-		freeeapi.WithHTTPClient(httpClient),
-		// TODO: add options...
-	)
-	if err != nil {
-		return nil, fmt.Errorf("create freeeapi client: %w", err)
-	}
-	return client, nil
-}
-
-var app = &cli.Command{
-	Name:    "ffbox",
-	Usage:   "freee会計の ファイルボックス を操作します",
-	Version: version,
-	Flags: []cli.Flag{
-		FlagOauth2ClientID,
-		FlagOauth2ClientSecret,
-		FlagCompanyID,
-	},
-	Commands: []*cli.Command{
-		{
-			Name:     "config",
-			Usage:    "CLIの設定を管理します",
-			Commands: cmdconfig.Commands,
-		},
-		listCompaniesCmd,
-		listFilesCmd,
-	},
-}
-
-var loadAppConfig cli.BeforeFunc = func(ctx context.Context, _ *cli.Command) (context.Context, error) {
-	cfg, err := config.Load()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "警告: 設定の読み込みに失敗しました: %v\n", err)
-		fmt.Fprintf(os.Stderr, "デフォルト設定を使用します\n")
-		cfg = config.Default()
-	}
-	ctx = config.NewContext(ctx, cfg)
-	return ctx, nil
-}
-
-var listCompaniesCmd = &cli.Command{
-	Name:   "companies",
-	Usage:  "あなたが所属するfreee事業所の一覧を表示します",
-	Before: loadAppConfig,
-	Action: func(ctx context.Context, cmd *cli.Command) error {
-		// Prepare OAuth2 client
-		httpClient, err := newOAuth2HTTPClient(ctx, cmd)
-		if err != nil {
-			return err
-		}
-
-		// Prepare freeeapi client
-		freeeapiClient, err := newFreeeAPIClient(httpClient)
-		if err != nil {
-			return err
-		}
-
-		// List companies
-		resp, err := freeeapiClient.GetCompaniesWithResponse(ctx)
-		if err != nil {
-			return fmt.Errorf("get companies: %w", err)
-		}
-		switch resp.StatusCode() {
-		case http.StatusOK:
-			r := resp.JSON200
-			if r == nil || r.Companies == nil {
-				fmt.Println("事業所が見つかりませんでした")
-				return nil
-			}
-			for _, company := range r.Companies {
-				b, err := json.Marshal(company)
-				if err != nil {
-					return fmt.Errorf("marshal company: %w", err)
-				}
-				fmt.Println(string(b))
-			}
-		default:
-			return fmt.Errorf("got unexpected response: %s", resp.Status())
-		}
-		return nil
-	},
-}
-
-var listFilesCmd = &cli.Command{
-	Name:  "list",
-	Usage: "freee会計のファイルボックス内のファイル一覧を表示します",
-	Flags: []cli.Flag{
-		&cli.Int64Flag{
-			Name:  "limit",
-			Usage: "取得するファイルの最大件数",
-			Value: defaultLimit,
-		},
-	},
-	Before: loadAppConfig,
-	// TODO: After で config を永続化する
-	Action: func(ctx context.Context, cmd *cli.Command) error {
-		// freee 事業所ID
-		// TODO: 個人利用者は切り替える必要がないので、config で管理する
-		if !cmd.IsSet(FlagCompanyID.Name) {
-			return fmt.Errorf("company-id must be set")
-		}
-		rawCompanyID := cmd.String(FlagCompanyID.Name)
-		companyID, err := strconv.ParseInt(rawCompanyID, 10, 64)
-		if err != nil {
-			return fmt.Errorf("invalid company-id: %w", err)
-		}
-
-		// Prepare OAuth2 client
-		httpClient, err := newOAuth2HTTPClient(ctx, cmd)
-		if err != nil {
-			return err
-		}
-
-		// Prepare freeeapi client
-		freeeapiClient, err := newFreeeAPIClient(httpClient)
-		if err != nil {
-			return err
-		}
-
-		// Sample: List receipts
-		// https://developer.freee.co.jp/reference/accounting/reference#/Receipts/get_receipts
-		//
-		// ここでは、とりあえず直近1年間の領収書（最大100件）を取得して表示するサンプルコードを示す。
-		today := time.Now()
-		params := &freeeapi.GetReceiptsParams{
-			CompanyId: companyID,
-			StartDate: today.Add(-365 * 24 * time.Hour).Format(time.DateOnly),
-			EndDate:   today.Format(time.DateOnly),
-			Limit:     ptr(cmd.Int64("limit")),
-		}
-		resp, err := freeeapiClient.GetReceiptsWithResponse(ctx, params)
-		if err != nil {
-			return fmt.Errorf("get receipts: %w", err)
-		}
-		switch resp.StatusCode() {
-		case http.StatusOK:
-			r := resp.JSON200
-			if r == nil || r.Receipts == nil {
-				fmt.Println("No receipts found.")
-				return nil
-			}
-			for _, receipt := range r.Receipts {
-				b, err := json.Marshal(receipt)
-				if err != nil {
-					return fmt.Errorf("marshal receipt: %w", err)
-				}
-				fmt.Println(string(b))
-			}
-		default:
-			return fmt.Errorf("got unexpected response: %s", resp.Status())
-		}
-		return nil
-	},
+	// Create freeeapi client
+	return freeeapi.NewClient(httpClient)
 }
