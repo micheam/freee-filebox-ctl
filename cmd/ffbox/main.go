@@ -33,7 +33,7 @@ var (
 			listCompaniesCmd,
 			{
 				Name:     "config",
-				Usage:    "CLIの設定を管理します",
+				Usage:    "このアプリケーションの設定を管理します",
 				Commands: cmdConfig,
 			},
 		},

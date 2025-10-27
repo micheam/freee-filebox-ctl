@@ -11,7 +11,7 @@ import (
 
 var listCompaniesCmd = &cli.Command{
 	Name:   "companies",
-	Usage:  "あなたが所属するfreee事業所の一覧を表示します",
+	Usage:  "所属するfreee事業所の一覧を表示します",
 	Before: loadAppConfig,
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		freeeapiClient, err := prepareFreeeAPIClient(ctx, cmd)

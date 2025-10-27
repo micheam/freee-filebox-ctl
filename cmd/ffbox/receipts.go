@@ -14,8 +14,9 @@ import (
 )
 
 var listFilesCmd = &cli.Command{
-	Name:  "list",
-	Usage: "ファイルボックス（証憑ファイル）の一覧を表示します",
+	Name:     "list",
+	Usage:    "ファイルボックス（証憑ファイル）の一覧を表示します",
+	Category: "receipts",
 	Flags: []cli.Flag{
 		&cli.Int64Flag{
 			Name:  "limit",

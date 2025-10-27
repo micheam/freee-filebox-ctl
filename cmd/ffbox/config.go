@@ -13,7 +13,7 @@ import (
 var cmdConfig = []*cli.Command{
 	/* config init */ {
 		Name:  "init",
-		Usage: "Config ファイルを初期化します",
+		Usage: "設定ファイルを初期化します",
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			f, err := os.Open(config.ConfigPath())
 			if err == nil {
@@ -33,7 +33,7 @@ var cmdConfig = []*cli.Command{
 	},
 	/* config show */ {
 		Name:  "show",
-		Usage: "現在の設定ファイルの内容を表示します",
+		Usage: "登録されている設定ファイルの内容を表示します",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:  "show-file-path",
