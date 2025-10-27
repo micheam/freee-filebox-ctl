@@ -22,6 +22,8 @@ var cmdReceiptsList = &cli.Command{
 			Usage: "取得するファイルの最大件数",
 			Value: 100,
 		},
+		// TODO: 他のフィルタリングオプションも追加する
+		//       freshness, start_date, end_date, updated_since など
 	},
 	Before: loadAppConfig,
 	// TODO: After で config を永続化する
@@ -30,16 +32,13 @@ var cmdReceiptsList = &cli.Command{
 		if err != nil {
 			return err
 		}
-
 		freeeapiClient, err := prepareFreeeAPIClient(ctx, cmd)
 		if err != nil {
 			return err
 		}
 
-		// Sample: List receipts
+		// List receipts
 		// https://developer.freee.co.jp/reference/accounting/reference#/Receipts/get_receipts
-		//
-		// ここでは、とりあえず直近1年間の領収書（最大100件）を取得して表示するサンプルコードを示す。
 		today := time.Now()
 		params := &freeeapigen.GetReceiptsParams{
 			CompanyId: companyID,
@@ -67,6 +66,57 @@ var cmdReceiptsList = &cli.Command{
 			}
 		default:
 			return fmt.Errorf("got unexpected response: %s", resp.Status())
+		}
+		return nil
+	},
+}
+
+var cmdReceiptShow = &cli.Command{
+	Category:  "receipts",
+	Name:      "show",
+	Usage:     "指定したIDの証憑ファイルの情報を表示します",
+	ArgsUsage: "[ids...]",
+	Flags:     []cli.Flag{},
+	Before:    loadAppConfig,
+	Action: func(ctx context.Context, cmd *cli.Command) error {
+		companyID, err := detectCompanyID(ctx, cmd)
+		if err != nil {
+			return err
+		}
+		freeeapiClient, err := prepareFreeeAPIClient(ctx, cmd)
+		if err != nil {
+			return err
+		}
+		rawIDs := cmd.Args().Slice()
+		if len(rawIDs) == 0 {
+			return fmt.Errorf("please specify at least one receipt ID")
+		}
+		var ids []int64
+		for i, rawID := range rawIDs {
+			var id int64
+			_, err := fmt.Sscanf(rawID, "%d", &id)
+			if err != nil {
+				return fmt.Errorf("invalid receipt ID[%d]: %w", i, err)
+			}
+			ids = append(ids, id)
+		}
+		for _, id := range ids { // NOTE: とりあえず直列で取得している
+			params := &freeeapigen.GetReceiptParams{CompanyId: companyID}
+			resp, err := freeeapiClient.GetReceiptWithResponse(ctx, id, params)
+			if err != nil {
+				return fmt.Errorf("get receipt ID %d: %w", id, err)
+			}
+			switch resp.StatusCode() {
+			case http.StatusOK:
+				r := resp.JSON200
+				b, err := json.Marshal(r.Receipt)
+				if err != nil {
+					return fmt.Errorf("marshal receipt ID %d: %w", id, err)
+				}
+				fmt.Println(string(b))
+			default:
+				return fmt.Errorf("got unexpected response for receipt ID %d: %s", id, resp.Status())
+			}
 		}
 		return nil
 	},

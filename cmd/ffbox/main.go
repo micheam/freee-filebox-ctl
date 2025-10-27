@@ -30,6 +30,8 @@ var (
 		},
 		Commands: []*cli.Command{
 			cmdReceiptsList,
+			cmdReceiptShow,
+
 			cmdCompaniesList,
 			{
 				Name:     "config",
