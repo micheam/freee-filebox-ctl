@@ -51,7 +51,7 @@ var (
 	}
 	flagCompanyID = &cli.StringFlag{
 		Name:    "company-id",
-		Usage:   "Freee Company ID",
+		Usage:   "freee 事業所ID",
 		Sources: cli.EnvVars("FREEEAPI_COMPANY_ID"),
 	}
 

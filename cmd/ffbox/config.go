@@ -71,3 +71,29 @@ var loadAppConfig cli.BeforeFunc = func(ctx context.Context, _ *cli.Command) (co
 	ctx = config.NewContext(ctx, cfg)
 	return ctx, nil
 }
+
+// detectCompanyID は、優先度に従って事業所IDを検出します。
+//  1. コマンドライン引数
+//  2. 環境変数
+//  3. 設定ファイル
+//
+// 全ての方法で事業所IDが見つからなかった場合、エラーを返します。
+func detectCompanyID(ctx context.Context, cmd *cli.Command) (int64, error) {
+	// 1. コマンドライン引数
+	// 2. 環境変数
+	if cmd.IsSet(flagCompanyID.Name) {
+		rawCompanyID := cmd.String(flagCompanyID.Name)
+		var parsed int64
+		_, err := fmt.Sscanf(rawCompanyID, "%d", &parsed)
+		if err != nil {
+			return 0, fmt.Errorf("invalid company-id: %w", err)
+		}
+		return parsed, nil
+	}
+	// 3. 設定ファイル
+	cfg := config.FromContext(ctx)
+	if cfg.Freee.CompanyID != 0 {
+		return cfg.Freee.CompanyID, nil
+	}
+	return 0, fmt.Errorf("事業者IDが指定されていません")
+}

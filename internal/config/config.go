@@ -21,15 +21,17 @@ var defaultConfig []byte
 
 // Config represents the application configuration
 type Config struct {
-	OAuth2 OAuth2Config `toml:"oauth2"`
-}
+	OAuth2 struct {
+		// TokenFile is the path to the file where OAuth2 tokens are stored
+		TokenFile string `toml:"token_file"`
+		// LocalAddr is the local address for OAuth2 callback server
+		LocalAddr string `toml:"local_addr"`
+	} `toml:"oauth2"`
 
-// OAuth2Config contains OAuth2-related configuration
-type OAuth2Config struct {
-	// TokenFile is the path to the file where OAuth2 tokens are stored
-	TokenFile string `toml:"token_file"`
-	// LocalAddr is the local address for OAuth2 callback server
-	LocalAddr string `toml:"local_addr"`
+	Freee struct {
+		// CompanyID is the default freee company ID to use for operations
+		CompanyID int64 `toml:"company_id"`
+	} `toml:"freee"`
 }
 
 func (c *Config) Marshal() ([]byte, error) {

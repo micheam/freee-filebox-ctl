@@ -6,11 +6,20 @@
 #
 # If no config file is found, default values will be used.
 
+[freee]
+
+company_id = 0
+# freee 事業者IDを指定します（例: 1999999）
+#
+# 事業者IDは コマンドライン引数や環境変数でも指定可能です。
+# コマンドライン引数や環境変数で指定された場合、そちらが優先されます。
+
 [oauth2]
+
+token_file = "token.json"
 # Path to the file where OAuth2 tokens are stored
 # Default: "token.json"
-token_file = "token.json"
 
+local_addr = ":3485"
 # Local address for OAuth2 callback server
 # Default: ":3485"
-local_addr = ":3485"

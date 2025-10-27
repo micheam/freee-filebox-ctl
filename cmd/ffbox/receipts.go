@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/urfave/cli/v3"
@@ -27,15 +26,9 @@ var cmdReceiptsList = &cli.Command{
 	Before: loadAppConfig,
 	// TODO: After で config を永続化する
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		// freee 事業所ID
-		// TODO: 個人利用者は切り替える必要がないので、config で管理する
-		if !cmd.IsSet(flagCompanyID.Name) {
-			return fmt.Errorf("company-id must be set")
-		}
-		rawCompanyID := cmd.String(flagCompanyID.Name)
-		companyID, err := strconv.ParseInt(rawCompanyID, 10, 64)
+		companyID, err := detectCompanyID(ctx, cmd)
 		if err != nil {
-			return fmt.Errorf("invalid company-id: %w", err)
+			return err
 		}
 
 		freeeapiClient, err := prepareFreeeAPIClient(ctx, cmd)
