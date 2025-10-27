@@ -29,8 +29,8 @@ var (
 			flagCompanyID,
 		},
 		Commands: []*cli.Command{
-			listFilesCmd,
-			listCompaniesCmd,
+			cmdReceiptsList,
+			cmdCompaniesList,
 			{
 				Name:     "config",
 				Usage:    "このアプリケーションの設定を管理します",

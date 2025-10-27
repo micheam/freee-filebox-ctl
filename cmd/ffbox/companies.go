@@ -9,7 +9,7 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-var listCompaniesCmd = &cli.Command{
+var cmdCompaniesList = &cli.Command{
 	Name:   "companies",
 	Usage:  "所属するfreee事業所の一覧を表示します",
 	Before: loadAppConfig,

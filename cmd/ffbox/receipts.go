@@ -13,7 +13,7 @@ import (
 	freeeapigen "github.com/micheam/freee-filebox-ctl/freeeapi/gen"
 )
 
-var listFilesCmd = &cli.Command{
+var cmdReceiptsList = &cli.Command{
 	Name:     "list",
 	Usage:    "ファイルボックス（証憑ファイル）の一覧を表示します",
 	Category: "receipts",
