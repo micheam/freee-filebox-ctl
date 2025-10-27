@@ -7,6 +7,7 @@ tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
 require (
 	github.com/micheam/go-oauth2kit v0.0.1
 	github.com/oapi-codegen/runtime v1.1.2
+	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/urfave/cli/v3 v3.5.0
 	golang.org/x/oauth2 v0.32.0
 )

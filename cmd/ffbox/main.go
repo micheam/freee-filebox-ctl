@@ -12,7 +12,10 @@ import (
 	"github.com/urfave/cli/v3"
 	"golang.org/x/oauth2"
 
+	cmdconfig "github.com/micheam/freee-filebox-ctl/cmd/ffbox/config"
 	freeeapi "github.com/micheam/freee-filebox-ctl/freeeapi/gen"
+	"github.com/micheam/freee-filebox-ctl/internal/config"
+
 	oauth2kit "github.com/micheam/go-oauth2kit"
 )
 
@@ -22,8 +25,7 @@ var version = "dev"
 
 func main() {
 	ctx := context.Background()
-	err := cmd.Run(ctx, os.Args)
-	if err != nil {
+	if err := app.Run(ctx, os.Args); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -64,21 +66,23 @@ func ptr[T any](v T) *T {
 
 // newOAuth2HTTPClient creates an HTTP client with OAuth2 authentication configured
 func newOAuth2HTTPClient(ctx context.Context, cmd *cli.Command) (*http.Client, error) {
+	appConfig := config.FromContext(ctx)
+
 	if !cmd.IsSet(FlagOauth2ClientID.Name) || !cmd.IsSet(FlagOauth2ClientSecret.Name) {
 		return nil, fmt.Errorf("client-id and client-secret must be set")
 	}
 
-	config := oauth2kit.Config{
+	oauth2Config := oauth2kit.Config{
 		ClientID:     cmd.String(FlagOauth2ClientID.Name),
 		ClientSecret: cmd.String(FlagOauth2ClientSecret.Name),
 		Endpoint:     freeeoauth2endpoint,
 		Scopes:       []string{"read", "write"},
-		TokenFile:    "token.json", // TODO: make configurable
-		LocalAddr:    ":3485",
+		TokenFile:    appConfig.OAuth2.TokenFile,
+		LocalAddr:    appConfig.OAuth2.LocalAddr,
 	}
 
 	oauth2Mngr := &oauth2kit.Manager{
-		Config: config,
+		Config: oauth2Config,
 		Writer: os.Stderr,
 	}
 
@@ -103,9 +107,9 @@ func newFreeeAPIClient(httpClient *http.Client) (*freeeapi.ClientWithResponses, 
 	return client, nil
 }
 
-var cmd = &cli.Command{
+var app = &cli.Command{
 	Name:    "ffbox",
-	Usage:   "A command-line tool for managing freee filebox files",
+	Usage:   "freee会計の ファイルボックス を操作します",
 	Version: version,
 	Flags: []cli.Flag{
 		FlagOauth2ClientID,
@@ -113,14 +117,31 @@ var cmd = &cli.Command{
 		FlagCompanyID,
 	},
 	Commands: []*cli.Command{
+		{
+			Name:     "config",
+			Usage:    "CLIの設定を管理します",
+			Commands: cmdconfig.Commands,
+		},
 		listCompaniesCmd,
 		listFilesCmd,
 	},
 }
 
+var loadAppConfig cli.BeforeFunc = func(ctx context.Context, _ *cli.Command) (context.Context, error) {
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "警告: 設定の読み込みに失敗しました: %v\n", err)
+		fmt.Fprintf(os.Stderr, "デフォルト設定を使用します\n")
+		cfg = config.Default()
+	}
+	ctx = config.NewContext(ctx, cfg)
+	return ctx, nil
+}
+
 var listCompaniesCmd = &cli.Command{
-	Name:  "companies",
-	Usage: "自身の利用可能な freee 事業所を一覧表示する",
+	Name:   "companies",
+	Usage:  "あなたが所属するfreee事業所の一覧を表示します",
+	Before: loadAppConfig,
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		// Prepare OAuth2 client
 		httpClient, err := newOAuth2HTTPClient(ctx, cmd)
@@ -143,7 +164,7 @@ var listCompaniesCmd = &cli.Command{
 		case http.StatusOK:
 			r := resp.JSON200
 			if r == nil || r.Companies == nil {
-				fmt.Println("No companies found.")
+				fmt.Println("事業所が見つかりませんでした")
 				return nil
 			}
 			for _, company := range r.Companies {
@@ -162,14 +183,16 @@ var listCompaniesCmd = &cli.Command{
 
 var listFilesCmd = &cli.Command{
 	Name:  "list",
-	Usage: "List files in freee filebox",
+	Usage: "freee会計のファイルボックス内のファイル一覧を表示します",
 	Flags: []cli.Flag{
 		&cli.Int64Flag{
 			Name:  "limit",
-			Usage: "Number of files to list",
+			Usage: "取得するファイルの最大件数",
 			Value: defaultLimit,
 		},
 	},
+	Before: loadAppConfig,
+	// TODO: After で config を永続化する
 	Action: func(ctx context.Context, cmd *cli.Command) error {
 		// freee 事業所ID
 		// TODO: 個人利用者は切り替える必要がないので、config で管理する

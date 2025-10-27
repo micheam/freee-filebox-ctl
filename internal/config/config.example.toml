@@ -1,0 +1,16 @@
+# ffbox configuration file
+#
+# This file should be placed in one of the following locations:
+# 1. $XDG_CONFIG_HOME/ffbox/config.toml
+# 2. $HOME/.config/ffbox/config.toml
+#
+# If no config file is found, default values will be used.
+
+[oauth2]
+# Path to the file where OAuth2 tokens are stored
+# Default: "token.json"
+token_file = "token.json"
+
+# Local address for OAuth2 callback server
+# Default: ":3485"
+local_addr = ":3485"
