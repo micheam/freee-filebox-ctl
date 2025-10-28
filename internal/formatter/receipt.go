@@ -3,7 +3,12 @@ package formatter
 import (
 	"fmt"
 	"io"
+	"os"
 	"strings"
+	"time"
+
+	"github.com/olekukonko/tablewriter"
+	"github.com/olekukonko/tablewriter/tw"
 
 	freeeapigen "github.com/micheam/freee-filebox-ctl/freeeapi/gen"
 )
@@ -24,12 +29,17 @@ func (f *Receipt) Format(r *freeeapigen.Receipt) error {
 		return fmt.Errorf("receipt is nil")
 	}
 
+	createdAt, err := formatDateTime(r.CreatedAt, "2006-01-02 15:04:05")
+	if err != nil {
+		return err
+	}
+
 	var b strings.Builder
 
 	// Basic information
 	fmt.Fprintf(&b, "ID:              %d\n", r.Id)
 	fmt.Fprintf(&b, "Status:          %s\n", formatStatus(r.Status))
-	fmt.Fprintf(&b, "Created:         %s\n", r.CreatedAt)
+	fmt.Fprintf(&b, "Created:         %s\n", createdAt)
 	fmt.Fprintf(&b, "Origin:          %s\n", r.Origin)
 	fmt.Fprintf(&b, "MIME Type:       %s\n", r.MimeType)
 	fmt.Fprintf(&b, "Description:     %s\n", formatString(r.Description))
@@ -65,7 +75,7 @@ func (f *Receipt) Format(r *freeeapigen.Receipt) error {
 	fmt.Fprintf(&b, "  Email:         %s\n", r.User.Email)
 	fmt.Fprintf(&b, "  ID:            %d\n", r.User.Id)
 
-	_, err := f.w.Write([]byte(b.String()))
+	_, err = f.w.Write([]byte(b.String()))
 	return err
 }
 
@@ -102,4 +112,75 @@ func formatAmount(amount int64) string {
 // formatStatus formats the status enum to a more readable string.
 func formatStatus(status freeeapigen.ReceiptStatus) string {
 	return string(status)
+}
+
+// formatDateTime formats a datetime string from srcFormat to destFormat in local timezone.
+func formatDateTime(v string, destFormat string) (string, error) {
+	t, err := time.Parse(time.RFC3339, v)
+	if err != nil {
+		return "", err
+	}
+	return t.Local().Format(destFormat), nil
+}
+
+// ReceiptList formats a list of receipts in a table format.
+type ReceiptList struct {
+	w io.Writer
+}
+
+// NewReceiptList creates a new ReceiptList formatter.
+func NewReceiptList(w io.Writer) *ReceiptList {
+	return &ReceiptList{w: w}
+}
+
+// Format writes the receipts in a table format using tablewriter.
+func (f *ReceiptList) Format(receipts []freeeapigen.Receipt) error {
+	if len(receipts) == 0 {
+		return nil
+	}
+	// Prepare table data
+	header := []any{"ID", "Status", "Created", "Description", "Partner", "Amount", "Issue Date"}
+	headerAlignments := []tw.Align{tw.AlignLeft, tw.AlignLeft, tw.AlignLeft, tw.AlignLeft, tw.AlignLeft, tw.AlignRight, tw.AlignLeft}
+	rows := make([][]any, 0, len(receipts))
+	for _, receipt := range receipts {
+		var partnerName, issueDate string
+		var amount string
+		if receipt.ReceiptMetadatum != nil {
+			if receipt.ReceiptMetadatum.PartnerName != nil {
+				partnerName = *receipt.ReceiptMetadatum.PartnerName
+			}
+			if receipt.ReceiptMetadatum.Amount != nil {
+				amount = formatAmount(*receipt.ReceiptMetadatum.Amount)
+			}
+			if receipt.ReceiptMetadatum.IssueDate != nil {
+				issueDate = *receipt.ReceiptMetadatum.IssueDate
+			}
+		}
+		description := ""
+		if receipt.Description != nil {
+			description = *receipt.Description
+		}
+		createdAt, err := formatDateTime(receipt.CreatedAt, "2006-01-02 15:04")
+		if err != nil {
+			return err
+		}
+		row := []any{
+			fmt.Sprintf("%d", receipt.Id),
+			string(receipt.Status),
+			createdAt,
+			description,
+			partnerName,
+			amount,
+			issueDate,
+		}
+		rows = append(rows, row)
+	}
+	// Render table
+	table := tablewriter.NewTable(os.Stdout,
+		tablewriter.WithConfig(tablewriter.Config{
+			Row: tw.CellConfig{Alignment: tw.CellAlignment{PerColumn: headerAlignments}},
+		}))
+	table.Header(header...)
+	table.Bulk(rows)
+	return table.Render()
 }

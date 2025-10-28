@@ -25,6 +25,11 @@ var cmdReceiptsList = &cli.Command{
 			Usage:   "取得するファイルの最大件数",
 			Value:   100,
 		},
+		&cli.StringFlag{
+			Name:  "format",
+			Usage: "出力フォーマット (table, json)",
+			Value: "table",
+		},
 		// TODO: 他のフィルタリングオプションも追加する
 		//       freshness, start_date, end_date, updated_since など
 	},
@@ -60,12 +65,21 @@ var cmdReceiptsList = &cli.Command{
 				fmt.Println("No receipts found.")
 				return nil
 			}
-			for _, receipt := range r.Receipts {
-				b, err := json.Marshal(receipt)
-				if err != nil {
-					return fmt.Errorf("marshal receipt: %w", err)
+			format := cmd.String("format")
+			if format == "json" {
+				for _, receipt := range r.Receipts {
+					b, err := json.Marshal(receipt)
+					if err != nil {
+						return fmt.Errorf("marshal receipt: %w", err)
+					}
+					fmt.Println(string(b))
 				}
-				fmt.Println(string(b))
+			} else {
+				// Default: table format
+				f := formatter.NewReceiptList(os.Stdout)
+				if err := f.Format(r.Receipts); err != nil {
+					return fmt.Errorf("format receipts: %w", err)
+				}
 			}
 		default:
 			return fmt.Errorf("got unexpected response: %s", resp.Status())
