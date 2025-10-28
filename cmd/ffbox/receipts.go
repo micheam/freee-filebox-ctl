@@ -14,24 +14,46 @@ import (
 	"github.com/micheam/freee-filebox-ctl/internal/formatter"
 )
 
+var (
+	cmdReceiptsListDescription = `証憑ファイルの一覧を取得します。
+
+【NOTE】日付フィルタについて:
+   --created-start と --created-end は、証憑の「システム登録日」でフィルタリングします。
+   証憑の「発行日」とは異なる場合があるため、注意してください。`
+	cmdReceiptsListUsage           = "ファイルボックス（証憑ファイル）の一覧表示"
+	cmdReceiptsListFlags_startDate = &cli.StringFlag{
+		Name:  "created-start",
+		Usage: "システム登録 開始日",
+		Value: time.Now().AddDate(0, 0, -30).Format(time.DateOnly),
+	}
+	cmdReceiptsListFlags_endDate = &cli.StringFlag{
+		Name:  "created-end",
+		Usage: "システム登録 終了日",
+		Value: time.Now().Format(time.DateOnly),
+	}
+	cmdReceiptsListFlags_limit = &cli.UintFlag{
+		Name:    "limit",
+		Aliases: []string{"n"},
+		Usage:   "取得するファイルの最大件数（1〜3000）",
+		Value:   50,
+	}
+	cmdReceiptsListFlags_format = &cli.StringFlag{
+		Name:  "format",
+		Usage: "出力フォーマット (table, json)",
+		Value: "table",
+	}
+)
+
 var cmdReceiptsList = &cli.Command{
-	Name:     "list",
-	Usage:    "ファイルボックス（証憑ファイル）の一覧を表示します",
-	Category: "receipts",
+	Name:        "list",
+	Usage:       cmdReceiptsListUsage,
+	Category:    "receipts",
+	Description: cmdReceiptsListDescription,
 	Flags: []cli.Flag{
-		&cli.Int64Flag{
-			Name:    "limit",
-			Aliases: []string{"n"},
-			Usage:   "取得するファイルの最大件数",
-			Value:   100,
-		},
-		&cli.StringFlag{
-			Name:  "format",
-			Usage: "出力フォーマット (table, json)",
-			Value: "table",
-		},
-		// TODO: 他のフィルタリングオプションも追加する
-		//       freshness, start_date, end_date, updated_since など
+		cmdReceiptsListFlags_startDate,
+		cmdReceiptsListFlags_endDate,
+		cmdReceiptsListFlags_limit,
+		cmdReceiptsListFlags_format,
 	},
 	Before: loadAppConfig,
 	// TODO: After で config を永続化する
@@ -45,14 +67,29 @@ var cmdReceiptsList = &cli.Command{
 			return err
 		}
 
-		// List receipts
-		// https://developer.freee.co.jp/reference/accounting/reference#/Receipts/get_receipts
-		today := time.Now()
+		var (
+			startDate = cmd.String(cmdReceiptsListFlags_startDate.Name)
+			endDate   = cmd.String(cmdReceiptsListFlags_endDate.Name)
+		)
+
+		format := cmd.String(cmdReceiptsListFlags_format.Name)
+		switch format {
+		case "table", "json":
+			// valid
+		default:
+			return fmt.Errorf("format は table か json を指定してください")
+		}
+
+		limit := cmd.Uint(cmdReceiptsListFlags_limit.Name)
+		if limit < 1 || 3_000 < limit {
+			return fmt.Errorf("limit は 1〜3000 の範囲で指定してください")
+		}
+
 		params := &freeeapigen.GetReceiptsParams{
 			CompanyId: companyID,
-			StartDate: today.Add(-365 * 24 * time.Hour).Format(time.DateOnly),
-			EndDate:   today.Format(time.DateOnly),
-			Limit:     ptr(cmd.Int64("limit")),
+			StartDate: startDate,
+			EndDate:   endDate,
+			Limit:     ptr(int64(limit)),
 		}
 		resp, err := freeeapiClient.GetReceiptsWithResponse(ctx, params)
 		if err != nil {
@@ -65,7 +102,6 @@ var cmdReceiptsList = &cli.Command{
 				fmt.Println("No receipts found.")
 				return nil
 			}
-			format := cmd.String("format")
 			if format == "json" {
 				for _, receipt := range r.Receipts {
 					b, err := json.Marshal(receipt)
