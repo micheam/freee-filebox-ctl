@@ -20,9 +20,10 @@ var (
 
 	// app is the main CLI application
 	app = &cli.Command{
-		Name:    "ffbox",
-		Usage:   "freee会計の ファイルボックス を操作します",
-		Version: version,
+		Name:                  "ffbox",
+		Usage:                 "freee会計の ファイルボックス を操作します",
+		Version:               version,
+		EnableShellCompletion: true,
 		Flags: []cli.Flag{
 			flagOauth2ClientID,
 			flagOauth2ClientSecret,
