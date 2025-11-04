@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/urfave/cli/v3"
@@ -42,6 +43,14 @@ var (
 		Usage: "出力フォーマット (table, json)",
 		Value: "table",
 	}
+	cmdReceiptsListFlags_fields = &cli.StringFlag{
+		Name:  "fields",
+		Usage: "表示するフィールドのカンマ区切りリスト (例: id,status,amount)",
+	}
+	cmdReceiptsListFlags_listFields = &cli.BoolFlag{
+		Name:  "list-fields",
+		Usage: "利用可能なフィールドの一覧を表示",
+	}
 )
 
 var cmdReceiptsList = &cli.Command{
@@ -54,10 +63,20 @@ var cmdReceiptsList = &cli.Command{
 		cmdReceiptsListFlags_endDate,
 		cmdReceiptsListFlags_limit,
 		cmdReceiptsListFlags_format,
+		cmdReceiptsListFlags_fields,
+		cmdReceiptsListFlags_listFields,
 	},
 	Before: loadAppConfig,
 	// TODO: After で config を永続化する
 	Action: func(ctx context.Context, cmd *cli.Command) error {
+		// Handle --list-fields flag
+		if cmd.Bool(cmdReceiptsListFlags_listFields.Name) {
+			for _, field := range formatter.AvailableReceiptFields() {
+				fmt.Println(field)
+			}
+			return nil
+		}
+
 		companyID, err := detectCompanyID(ctx, cmd)
 		if err != nil {
 			return err
@@ -78,6 +97,17 @@ var cmdReceiptsList = &cli.Command{
 			// valid
 		default:
 			return fmt.Errorf("format は table か json を指定してください")
+		}
+
+		// Parse fields
+		var fields []string
+		fieldsStr := cmd.String(cmdReceiptsListFlags_fields.Name)
+		if fieldsStr != "" {
+			fields = strings.Split(fieldsStr, ",")
+			// Trim whitespace from each field
+			for i := range fields {
+				fields[i] = strings.TrimSpace(fields[i])
+			}
 		}
 
 		limit := cmd.Uint(cmdReceiptsListFlags_limit.Name)
@@ -104,23 +134,24 @@ var cmdReceiptsList = &cli.Command{
 			}
 			if format == "json" {
 				for _, receipt := range r.Receipts {
-					b, err := json.Marshal(receipt)
+					output := formatter.ExtractReceiptFields(&receipt, fields)
+					b, err := json.Marshal(output)
 					if err != nil {
 						return fmt.Errorf("marshal receipt: %w", err)
 					}
 					fmt.Println(string(b))
 				}
-			} else {
-				// Default: table format
-				f := formatter.NewReceiptList(os.Stdout)
-				if err := f.Format(r.Receipts); err != nil {
-					return fmt.Errorf("format receipts: %w", err)
-				}
+				return nil
 			}
+			// Default: table format
+			f := formatter.NewReceiptList(os.Stdout)
+			if err := f.FormatWithFields(r.Receipts, fields); err != nil {
+				return fmt.Errorf("format receipts: %w", err)
+			}
+			return nil
 		default:
 			return fmt.Errorf("got unexpected response: %s", resp.Status())
 		}
-		return nil
 	},
 }
 

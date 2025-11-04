@@ -1,9 +1,11 @@
 package formatter
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -123,6 +125,68 @@ func formatDateTime(v string, destFormat string) (string, error) {
 	return t.Local().Format(destFormat), nil
 }
 
+// ExtractReceiptFields extracts specified fields from a receipt and returns a map.
+// If fields is empty, returns all fields.
+func ExtractReceiptFields(receipt *freeeapigen.Receipt, fields []string) map[string]any {
+	result := make(map[string]any)
+
+	// If no fields specified, return all fields as a map
+	if len(fields) == 0 {
+		// Marshal and unmarshal to get a map with all fields
+		b, _ := json.Marshal(receipt)
+		json.Unmarshal(b, &result)
+		return result
+	}
+
+	// Extract only specified fields
+	for _, field := range fields {
+		switch field {
+		case "id":
+			result["id"] = receipt.Id
+		case "status":
+			result["status"] = receipt.Status
+		case "created_at":
+			result["created_at"] = receipt.CreatedAt
+		case "description":
+			result["description"] = receipt.Description
+		case "document_type":
+			result["document_type"] = receipt.DocumentType
+		case "origin":
+			result["origin"] = receipt.Origin
+		case "mime_type":
+			result["mime_type"] = receipt.MimeType
+		case "qualified_invoice":
+			result["qualified_invoice"] = receipt.QualifiedInvoice
+		case "invoice_registration_number":
+			result["invoice_registration_number"] = receipt.InvoiceRegistrationNumber
+		case "partner_name", "partner":
+			if receipt.ReceiptMetadatum != nil {
+				result["partner_name"] = receipt.ReceiptMetadatum.PartnerName
+			}
+		case "amount":
+			if receipt.ReceiptMetadatum != nil {
+				result["amount"] = receipt.ReceiptMetadatum.Amount
+			}
+		case "issue_date":
+			if receipt.ReceiptMetadatum != nil {
+				result["issue_date"] = receipt.ReceiptMetadatum.IssueDate
+			}
+		case "receipt_metadatum":
+			result["receipt_metadatum"] = receipt.ReceiptMetadatum
+		case "user":
+			result["user"] = receipt.User
+		case "user_id":
+			result["user_id"] = receipt.User.Id
+		case "user_email":
+			result["user_email"] = receipt.User.Email
+		case "user_name", "user_display_name":
+			result["user_name"] = receipt.User.DisplayName
+		}
+	}
+
+	return result
+}
+
 // ReceiptList formats a list of receipts in a table format.
 type ReceiptList struct {
 	w io.Writer
@@ -135,47 +199,40 @@ func NewReceiptList(w io.Writer) *ReceiptList {
 
 // Format writes the receipts in a table format using tablewriter.
 func (f *ReceiptList) Format(receipts []freeeapigen.Receipt) error {
+	return f.FormatWithFields(receipts, nil)
+}
+
+// FormatWithFields writes the receipts in a table format with only the specified fields.
+// If fields is empty, displays all default fields.
+func (f *ReceiptList) FormatWithFields(receipts []freeeapigen.Receipt, fields []string) error {
 	if len(receipts) == 0 {
 		return nil
 	}
-	// Prepare table data
-	header := []any{"ID", "Status", "Created", "Description", "Partner", "Amount", "Issue Date"}
-	headerAlignments := []tw.Align{tw.AlignLeft, tw.AlignLeft, tw.AlignLeft, tw.AlignLeft, tw.AlignLeft, tw.AlignRight, tw.AlignLeft}
+	selectedFields, err := determineReceiptFields(fields)
+	if err != nil {
+		return fmt.Errorf("determining receipt fields: %w", err)
+	}
+
+	header := make([]any, len(selectedFields))
+	headerAlignments := make([]tw.Align, len(selectedFields))
+	for i, fd := range selectedFields {
+		header[i] = fd.Header
+		headerAlignments[i] = fd.Alignment
+	}
+
 	rows := make([][]any, 0, len(receipts))
 	for _, receipt := range receipts {
-		var partnerName, issueDate string
-		var amount string
-		if receipt.ReceiptMetadatum != nil {
-			if receipt.ReceiptMetadatum.PartnerName != nil {
-				partnerName = *receipt.ReceiptMetadatum.PartnerName
+		row := make([]any, len(selectedFields))
+		for i, fd := range selectedFields {
+			val, err := fd.Extractor(&receipt)
+			if err != nil {
+				return err
 			}
-			if receipt.ReceiptMetadatum.Amount != nil {
-				amount = formatAmount(*receipt.ReceiptMetadatum.Amount)
-			}
-			if receipt.ReceiptMetadatum.IssueDate != nil {
-				issueDate = *receipt.ReceiptMetadatum.IssueDate
-			}
-		}
-		description := ""
-		if receipt.Description != nil {
-			description = *receipt.Description
-		}
-		createdAt, err := formatDateTime(receipt.CreatedAt, "2006-01-02 15:04")
-		if err != nil {
-			return err
-		}
-		row := []any{
-			fmt.Sprintf("%d", receipt.Id),
-			string(receipt.Status),
-			createdAt,
-			description,
-			partnerName,
-			amount,
-			issueDate,
+			row[i] = val
 		}
 		rows = append(rows, row)
 	}
-	// Render table
+
 	table := tablewriter.NewTable(os.Stdout,
 		tablewriter.WithConfig(tablewriter.Config{
 			Row: tw.CellConfig{Alignment: tw.CellAlignment{PerColumn: headerAlignments}},
@@ -183,4 +240,186 @@ func (f *ReceiptList) Format(receipts []freeeapigen.Receipt) error {
 	table.Header(header...)
 	table.Bulk(rows)
 	return table.Render()
+}
+
+// determineReceiptFields determines which fields to display based on requested fields.
+func determineReceiptFields(requestedFields []string) ([]fieldDef, error) {
+	if len(requestedFields) == 0 {
+		requestedFields = slices.Clone(defaultReceiptFieldNames)
+	}
+	var selectedFields = make([]fieldDef, 0, len(requestedFields))
+	for i, fieldName := range requestedFields {
+		fd, ok := allFields[fieldName]
+		if !ok {
+			return nil, &UnsupportedFieldError{idx: uint(i), fieldName: fieldName}
+		}
+		selectedFields = append(selectedFields, fd)
+	}
+	return selectedFields, nil
+}
+
+// AvailableReceiptFields returns a list of all available receipt fields.
+func AvailableReceiptFields() []string {
+	return slices.Clone(allReceiptFieldNames)
+}
+
+// allReceiptFieldNames defines the available fields for receipts.
+// this comes from [freeeapigen.Receipt] and its nested structs
+var allReceiptFieldNames = []string{
+	"id",
+	"created_at",
+	"description",
+	"document_type",
+	"invoice_registration_number",
+	"mime_type",
+	"origin",
+	"qualified_invoice",
+	"receipt_metadatum.amount",
+	"receipt_metadatum.issue_date",
+	"receipt_metadatum.partner_name",
+	"status",
+	"user.display_name",
+	"user.email",
+	"user.id",
+}
+
+// defaultReceiptFieldNames defines the default fields to display in receipt lists.
+var defaultReceiptFieldNames = []string{
+	"id",
+	"status",
+	"created_at",
+	"description",
+	"receipt_metadatum.partner_name",
+	"receipt_metadatum.amount",
+	"receipt_metadatum.issue_date",
+}
+
+type fieldDef struct {
+	Name      string
+	Header    string
+	Alignment tw.Align
+	Extractor func(*freeeapigen.Receipt) (any, error)
+}
+
+var allFields = map[string]fieldDef{
+	"id": {
+		Header:    "ID",
+		Alignment: tw.AlignLeft,
+		Extractor: func(r *freeeapigen.Receipt) (any, error) {
+			return fmt.Sprintf("%d", r.Id), nil
+		},
+	},
+	"status": {
+		Header:    "Status",
+		Alignment: tw.AlignLeft,
+		Extractor: func(r *freeeapigen.Receipt) (any, error) {
+			return string(r.Status), nil
+		},
+	},
+	"created_at": {
+		Header:    "Created At",
+		Alignment: tw.AlignLeft,
+		Extractor: func(r *freeeapigen.Receipt) (any, error) {
+			return formatDateTime(r.CreatedAt, "2006-01-02 15:04:05")
+		},
+	},
+	"description": {
+		Header:    "Description",
+		Alignment: tw.AlignLeft,
+		Extractor: func(r *freeeapigen.Receipt) (any, error) {
+			return formatString(r.Description), nil
+		},
+	},
+	"document_type": {
+		Header:    "Document Type",
+		Alignment: tw.AlignLeft,
+		Extractor: func(r *freeeapigen.Receipt) (any, error) {
+			if r.DocumentType == nil {
+				return "(none)", nil
+			}
+			return string(*r.DocumentType), nil
+		},
+	},
+	"invoice_registration_number": {
+		Header:    "Invoice Reg No",
+		Alignment: tw.AlignLeft,
+		Extractor: func(r *freeeapigen.Receipt) (any, error) {
+			return formatString(r.InvoiceRegistrationNumber), nil
+		},
+	},
+	"mime_type": {
+		Header:    "MIME Type",
+		Alignment: tw.AlignLeft,
+		Extractor: func(r *freeeapigen.Receipt) (any, error) {
+			return r.MimeType, nil
+		},
+	},
+	"origin": {
+		Header:    "Origin",
+		Alignment: tw.AlignLeft,
+		Extractor: func(r *freeeapigen.Receipt) (any, error) {
+			return r.Origin, nil
+		},
+	},
+	"qualified_invoice": {
+		Header:    "Qualified Invoice",
+		Alignment: tw.AlignLeft,
+		Extractor: func(r *freeeapigen.Receipt) (any, error) {
+			if r.QualifiedInvoice == nil {
+				return "(none)", nil
+			}
+			return string(*r.QualifiedInvoice), nil
+		},
+	},
+	"receipt_metadatum.amount": {
+		Header:    "Amount",
+		Alignment: tw.AlignRight,
+		Extractor: func(r *freeeapigen.Receipt) (any, error) {
+			if r.ReceiptMetadatum == nil || r.ReceiptMetadatum.Amount == nil {
+				return "(none)", nil
+			}
+			return formatAmount(*r.ReceiptMetadatum.Amount), nil
+		},
+	},
+	"receipt_metadatum.issue_date": {
+		Header:    "Issue Date",
+		Alignment: tw.AlignLeft,
+		Extractor: func(r *freeeapigen.Receipt) (any, error) {
+			if r.ReceiptMetadatum == nil {
+				return "(none)", nil
+			}
+			return formatString(r.ReceiptMetadatum.IssueDate), nil
+		},
+	},
+	"receipt_metadatum.partner_name": {
+		Header:    "Partner",
+		Alignment: tw.AlignLeft,
+		Extractor: func(r *freeeapigen.Receipt) (any, error) {
+			if r.ReceiptMetadatum == nil {
+				return "(none)", nil
+			}
+			return formatString(r.ReceiptMetadatum.PartnerName), nil
+		},
+	},
+	"user.display_name": {
+		Header:    "User Name",
+		Alignment: tw.AlignLeft,
+		Extractor: func(r *freeeapigen.Receipt) (any, error) {
+			return formatString(r.User.DisplayName), nil
+		},
+	},
+	"user.email": {
+		Header:    "User Email",
+		Alignment: tw.AlignLeft,
+		Extractor: func(r *freeeapigen.Receipt) (any, error) {
+			return r.User.Email, nil
+		},
+	},
+	"user.id": {
+		Header:    "User ID",
+		Alignment: tw.AlignLeft,
+		Extractor: func(r *freeeapigen.Receipt) (any, error) {
+			return fmt.Sprintf("%d", r.User.Id), nil
+		},
+	},
 }
