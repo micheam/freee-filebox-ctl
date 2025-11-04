@@ -56,8 +56,6 @@ var (
 		Usage:   "freee 事業所ID",
 		Sources: cli.EnvVars("FREEEAPI_COMPANY_ID"),
 	}
-
-	freeeapiEndpoint = "https://api.freee.co.jp/"
 )
 
 func main() {
@@ -74,6 +72,9 @@ func ptr[T any](v T) *T {
 	return &v
 }
 
+// deref returns the value pointed to by p, or defaultValue if p is nil.
+//
+//lint:ignore U1000 This generic function might be useful in the future.
 func deref[T any](p *T, defaultValue T) T {
 	if p != nil {
 		return *p

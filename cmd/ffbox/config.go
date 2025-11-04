@@ -4,11 +4,24 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 
 	"github.com/urfave/cli/v3"
 
 	"github.com/micheam/freee-filebox-ctl/internal/config"
 )
+
+// selectEditor determines which editor to use based on environment variables.
+// It follows the common Unix convention: $VISUAL → $EDITOR → vi (POSIX standard)
+func selectEditor() string {
+	if editor := os.Getenv("VISUAL"); editor != "" {
+		return editor
+	}
+	if editor := os.Getenv("EDITOR"); editor != "" {
+		return editor
+	}
+	return "vi"
+}
 
 var cmdConfig = []*cli.Command{
 	/* config init */ {
@@ -29,6 +42,24 @@ var cmdConfig = []*cli.Command{
 			}
 			fmt.Printf("設定ファイルが作成されました: %q\n", config.ConfigPath())
 			return nil
+		},
+	},
+	/* config edit */ {
+		Name:  "edit",
+		Usage: "設定ファイルをエディタで編集します",
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			configPath := config.ConfigPath()
+			if _, err := os.Stat(configPath); os.IsNotExist(err) {
+				return fmt.Errorf("設定ファイルが存在しません: %q\n'ffbox config init' を実行して設定ファイルを作成してください", configPath)
+			}
+
+			editor := selectEditor()
+			editorCmd := exec.Command(editor, configPath)
+			editorCmd.Stdin = os.Stdin
+			editorCmd.Stdout = os.Stdout
+			editorCmd.Stderr = os.Stderr
+
+			return editorCmd.Run()
 		},
 	},
 	/* config show */ {
