@@ -13,45 +13,49 @@ import (
 	oauth2kit "github.com/micheam/go-oauth2kit"
 )
 
+// version は、ビルド時に ldflags 経由で設定されます。
+// ローカルビルド時にフラグが省略された場合は、そのまま "dev" が採用されます。
+var version = "dev"
+
+// app は、CLI アプリケーションのルートコマンドです。
+var app = &cli.Command{
+	Name:                  "ffbox",
+	Usage:                 "freee会計の ファイルボックス を操作します",
+	Version:               version,
+	EnableShellCompletion: true,
+	Flags: []cli.Flag{
+		flagOauth2ClientID,
+		flagOauth2ClientSecret,
+		flagCompanyID,
+	},
+	Commands: []*cli.Command{
+		cmdReceiptsList,
+		cmdReceiptShow,
+
+		cmdCompaniesList,
+		{
+			Name:     "config",
+			Usage:    "このアプリケーションの設定を管理します",
+			Commands: cmdConfig,
+		},
+	},
+}
+
+// Global flags...
 var (
-	// version is set via ldflags during build
-	// Default: "dev" for local development builds
-	version = "dev"
-
-	// app is the main CLI application
-	app = &cli.Command{
-		Name:                  "ffbox",
-		Usage:                 "freee会計の ファイルボックス を操作します",
-		Version:               version,
-		EnableShellCompletion: true,
-		Flags: []cli.Flag{
-			flagOauth2ClientID,
-			flagOauth2ClientSecret,
-			flagCompanyID,
-		},
-		Commands: []*cli.Command{
-			cmdReceiptsList,
-			cmdReceiptShow,
-
-			cmdCompaniesList,
-			{
-				Name:     "config",
-				Usage:    "このアプリケーションの設定を管理します",
-				Commands: cmdConfig,
-			},
-		},
-	}
-
+	// flagOauth2ClientID は、OAuth2 クライアントIDを指定するためのフラグです。
 	flagOauth2ClientID = &cli.StringFlag{
 		Name:    "client-id",
 		Usage:   "OAuth2 Client ID",
 		Sources: cli.EnvVars("FREEEAPI_OAUTH2_CLIENT_ID"),
 	}
+	// flagOauth2ClientSecret は、OAuth2 クライアントシークレットを指定するためのフラグです。
 	flagOauth2ClientSecret = &cli.StringFlag{
 		Name:    "client-secret",
 		Usage:   "OAuth2 Client Secret",
 		Sources: cli.EnvVars("FREEEAPI_OAUTH2_CLIENT_SECRET"),
 	}
+	// flagCompanyID は、freee 事業所IDを指定するためのフラグです。
 	flagCompanyID = &cli.StringFlag{
 		Name:    "company-id",
 		Usage:   "freee 事業所ID",
@@ -67,13 +71,18 @@ func main() {
 	}
 }
 
-// misc helper functions --------------------------------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
 
+// ptr は、値 v のポインタを返します。
+//
+//lint:ignore U1000 This generic function might be useful in the future.
 func ptr[T any](v T) *T {
 	return &v
 }
 
-// deref returns the value pointed to by p, or defaultValue if p is nil.
+// defer は、ポインタ p が nil でなければその指す値を返し、nil であれば defaultValue を返します。
 //
 //lint:ignore U1000 This generic function might be useful in the future.
 func deref[T any](p *T, defaultValue T) T {
@@ -83,13 +92,18 @@ func deref[T any](p *T, defaultValue T) T {
 	return defaultValue
 }
 
+// prepareFreeeAPIClient は、OAuth2 認証を使用して freee API クライアントを初期化します。
+//
+// 実行時に context.Context から Application Config が事前に読み込まれていることを前提としています。
+// 読み込まれていない場合、panic します。
 func prepareFreeeAPIClient(ctx context.Context, cmd *cli.Command) (*freeeapi.Client, error) {
-	// Prepare OAuth2 HTTP client
 	appConfig := config.FromContext(ctx)
+	if appConfig == nil {
+		panic("app config is not set in context")
+	}
 	if !cmd.IsSet(flagOauth2ClientID.Name) || !cmd.IsSet(flagOauth2ClientSecret.Name) {
 		return nil, fmt.Errorf("client-id and client-secret must be set")
 	}
-
 	oauth2Config := oauth2kit.Config{
 		ClientID:     cmd.String(flagOauth2ClientID.Name),
 		ClientSecret: cmd.String(flagOauth2ClientSecret.Name),
@@ -106,7 +120,5 @@ func prepareFreeeAPIClient(ctx context.Context, cmd *cli.Command) (*freeeapi.Cli
 	if err != nil {
 		return nil, fmt.Errorf("create oauth2 client: %w", err)
 	}
-
-	// Create freeeapi client
 	return freeeapi.NewClient(httpClient)
 }

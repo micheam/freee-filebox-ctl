@@ -11,18 +11,6 @@ import (
 	"github.com/micheam/freee-filebox-ctl/internal/config"
 )
 
-// selectEditor determines which editor to use based on environment variables.
-// It follows the common Unix convention: $VISUAL → $EDITOR → vi (POSIX standard)
-func selectEditor() string {
-	if editor := os.Getenv("VISUAL"); editor != "" {
-		return editor
-	}
-	if editor := os.Getenv("EDITOR"); editor != "" {
-		return editor
-	}
-	return "vi"
-}
-
 var cmdConfig = []*cli.Command{
 	/* config init */ {
 		Name:  "init",
@@ -92,7 +80,12 @@ var cmdConfig = []*cli.Command{
 	},
 }
 
-var loadAppConfig cli.BeforeFunc = func(ctx context.Context, _ *cli.Command) (context.Context, error) {
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
+
+// loadAppConfig は、コマンド実行前に設定ファイルを読み込み、コンテキストに設定を注入します。
+func loadAppConfig(ctx context.Context, _ *cli.Command) (context.Context, error) {
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "警告: 設定の読み込みに失敗しました: %v\n", err)
@@ -103,7 +96,24 @@ var loadAppConfig cli.BeforeFunc = func(ctx context.Context, _ *cli.Command) (co
 	return ctx, nil
 }
 
+var _ cli.BeforeFunc = loadAppConfig
+
+// selectEditor は、使用するエディタを環境変数に基づいて決定します。
+// 一般的なUnixの慣習に従い、以下の優先順位で選択します:
+//
+// $VISUAL → $EDITOR → vi
+func selectEditor() string {
+	if editor := os.Getenv("VISUAL"); editor != "" {
+		return editor
+	}
+	if editor := os.Getenv("EDITOR"); editor != "" {
+		return editor
+	}
+	return "vi"
+}
+
 // detectCompanyID は、優先度に従って事業所IDを検出します。
+//
 //  1. コマンドライン引数
 //  2. 環境変数
 //  3. 設定ファイル
