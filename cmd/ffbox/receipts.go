@@ -4,13 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
+	"path"
 	"strings"
 	"time"
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/micheam/freee-filebox-ctl/freeeapi"
 	freeeapigen "github.com/micheam/freee-filebox-ctl/freeeapi/gen"
 	"github.com/micheam/freee-filebox-ctl/internal/formatter"
 )
@@ -226,4 +229,182 @@ var cmdReceiptShow = &cli.Command{
 		}
 		return nil
 	},
+}
+
+var cmdReceiptCreate = &cli.Command{
+	Category:  "receipts",
+	Name:      "create",
+	Usage:     "証憑ファイルを新規作成します",
+	ArgsUsage: "[file_path...]",
+	Flags: []cli.Flag{
+		flagReceiptCreateDescription,
+		flagReceiptCreateDocumentType,
+		flagReceiptCreateQualifiedInvoice,
+		flagReceiptCreateReceiptMetadatumAmount,
+		flagReceiptCreateReceiptMetadatumIssueDate,
+		flagReceiptCreateReceiptMetadatumPartnerName,
+	},
+	Before: loadAppConfig,
+	Action: func(ctx context.Context, cmd *cli.Command) error {
+		companyID, err := detectCompanyID(ctx, cmd)
+		if err != nil {
+			return err
+		}
+		freeeapiClient, err := prepareFreeeAPIClient(ctx, cmd)
+		if err != nil {
+			return err
+		}
+		filePathSlice := cmd.Args().Slice()
+		if len(filePathSlice) == 0 {
+			return fmt.Errorf("登録するファイルのパスを指定してください")
+		}
+		for _, filePath := range filePathSlice {
+			f, err := os.Open(filePath)
+			if err != nil {
+				return fmt.Errorf("open file %s: %w", filePath, err)
+			}
+			created, err := createReceiptWithFile(ctx, cmd, freeeapiClient, companyID, path.Base(filePath), f)
+			if err != nil {
+				f.Close()
+				return fmt.Errorf("create receipt with file %s: %w", filePath, err)
+			}
+			fmt.Fprintf(cmd.Writer, "%d\n", created.Id) // Render created receipt ID
+		}
+		return nil
+	},
+}
+
+// ReceiptCreateParams に設定可能な Optional Flags 定義
+//
+// - Description                  メモ (255文字以内)
+// - DocumentType                 書類の種類（receipt、invoice、other）
+// - QualifiedInvoice             適格請求書等（qualified、not_qualified、unselected）
+// - ReceiptMetadatumAmount       金額
+// - ReceiptMetadatumIssueDate    発行日 (yyyy-mm-dd)
+// - ReceiptMetadatumPartnerName  発行元
+var (
+	flagReceiptCreateDescription = &cli.StringFlag{
+		Name:  "description",
+		Usage: "証憑のメモ (255文字以内)",
+	}
+	flagReceiptCreateDocumentType = &cli.StringFlag{
+		Name:  "document-type",
+		Usage: "書類の種類（receipt、invoice、other）",
+		Validator: func(in string) error {
+			switch in {
+			case "", "receipt", "invoice", "other":
+				return nil
+			default:
+				return fmt.Errorf("書類の種類が不正です: %s", in)
+			}
+		},
+	}
+	flagReceiptCreateQualifiedInvoice = &cli.StringFlag{
+		Name:  "qualified-invoice",
+		Usage: "適格請求書等（qualified、not_qualified、unselected）",
+		Validator: func(in string) error {
+			switch in {
+			case "", "qualified", "not_qualified", "unselected":
+				return nil
+			default:
+				return fmt.Errorf("適格請求書等の値が不正です: %s", in)
+			}
+		},
+	}
+	flagReceiptCreateReceiptMetadatumAmount = &cli.UintFlag{
+		Name:  "amount",
+		Usage: "証憑の金額",
+	}
+	flagReceiptCreateReceiptMetadatumIssueDate = &cli.StringFlag{
+		Name:  "issue-date",
+		Usage: "証憑の発行日 (yyyy-mm-dd)",
+		Validator: func(in string) error { // make sure the date is valid time.DateOnly format
+			if in == "" {
+				return nil
+			}
+			_, err := time.Parse(time.DateOnly, in)
+			if err != nil {
+				return fmt.Errorf("発行日は yyyy-mm-dd 形式で指定してください: %w", err)
+			}
+			return nil
+		},
+	}
+	flagReceiptCreateReceiptMetadatumPartnerName = &cli.StringFlag{
+		Name:  "partner-name",
+		Usage: "証憑の発行元",
+	}
+)
+
+func parseReceiptCreateDescriptionFlags(cmd *cli.Command, params *freeeapigen.ReceiptCreateParams) error {
+	if v := cmd.String(flagReceiptCreateDescription.Name); v != "" {
+		params.Description = ptr(v)
+	}
+	if v := cmd.String(flagReceiptCreateDocumentType.Name); v != "" {
+		switch v {
+		case "receipt":
+			params.DocumentType = ptr(freeeapigen.ReceiptCreateParamsDocumentTypeReceipt)
+		case "invoice":
+			params.DocumentType = ptr(freeeapigen.ReceiptCreateParamsDocumentTypeInvoice)
+		case "other":
+			params.DocumentType = ptr(freeeapigen.ReceiptCreateParamsDocumentTypeOther)
+		default:
+			return fmt.Errorf("invalid document-type: %s", v)
+		}
+	}
+	if v := cmd.String(flagReceiptCreateQualifiedInvoice.Name); v != "" {
+		switch v {
+		case "qualified":
+			params.QualifiedInvoice = ptr(freeeapigen.ReceiptCreateParamsQualifiedInvoiceQualified)
+		case "not_qualified":
+			params.QualifiedInvoice = ptr(freeeapigen.ReceiptCreateParamsQualifiedInvoiceNotQualified)
+		case "unselected":
+			params.QualifiedInvoice = ptr(freeeapigen.ReceiptCreateParamsQualifiedInvoiceUnselected)
+		default:
+			return fmt.Errorf("invalid qualified-invoice: %s", v)
+		}
+	}
+	if v := cmd.Int(flagReceiptCreateReceiptMetadatumAmount.Name); v != 0 {
+		params.ReceiptMetadatumAmount = ptr(int64(v))
+	}
+	if v := cmd.String(flagReceiptCreateReceiptMetadatumIssueDate.Name); v != "" {
+		params.ReceiptMetadatumIssueDate = ptr(v)
+	}
+	if v := cmd.String(flagReceiptCreateReceiptMetadatumPartnerName.Name); v != "" {
+		params.ReceiptMetadatumPartnerName = ptr(v)
+	}
+	return nil
+}
+
+// createReceiptWithFile is a helper function to create a receipt with given file path
+// and return the created Receipt object.
+func createReceiptWithFile(
+	ctx context.Context,
+	cmd *cli.Command,
+	apiClient *freeeapi.Client,
+	companyID int64,
+	filename string,
+	r io.Reader,
+) (*freeeapigen.Receipt, error) {
+	params, err := freeeapi.NewReceiptCreateParams(companyID, filename, r)
+	if err != nil {
+		return nil, fmt.Errorf("create receipt params: %w", err)
+	}
+	if err := parseReceiptCreateDescriptionFlags(cmd, params); err != nil {
+		return nil, err
+	}
+
+	body, contentType, err := freeeapi.EncodeReceiptCreateParams(params)
+	if err != nil {
+		return nil, fmt.Errorf("encoding receipt params: %w", err)
+	}
+
+	resp, err := apiClient.CreateReceiptWithBodyWithResponse(ctx, contentType, body)
+	if err != nil {
+		return nil, fmt.Errorf("create receipt: %w", err)
+	}
+
+	if resp.StatusCode() == http.StatusCreated {
+		return ptr(resp.JSON201.Receipt), nil
+	}
+	return nil, fmt.Errorf("got unexpected response: %s", resp.Status())
 }
