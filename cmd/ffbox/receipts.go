@@ -237,6 +237,7 @@ var cmdReceiptCreate = &cli.Command{
 	Usage:     "証憑ファイルを新規作成します",
 	ArgsUsage: "[file_path...]",
 	Flags: []cli.Flag{
+		flagReceiptCreateFilename,
 		flagReceiptCreateDescription,
 		flagReceiptCreateDocumentType,
 		flagReceiptCreateQualifiedInvoice,
@@ -258,16 +259,50 @@ var cmdReceiptCreate = &cli.Command{
 		if len(filePathSlice) == 0 {
 			return fmt.Errorf("登録するファイルのパスを指定してください")
 		}
+		filenameFlag := cmd.String(flagReceiptCreateFilename.Name)
+		if filenameFlag != "" && filePathSlice[0] != "-" && len(filePathSlice) > 1 {
+			return fmt.Errorf("--filename は単一ファイルまたは標準入力の場合のみ指定可能です")
+		}
+
+		// Handle fileinput from stdin
+		if filePathSlice[0] == "-" {
+			content, err := io.ReadAll(os.Stdin)
+			if err != nil {
+				return fmt.Errorf("read stdin: %w", err)
+			}
+			filename := filenameFlag
+			if filename == "" {
+				ext, err := detectExt(content)
+				if err != nil {
+					return fmt.Errorf("detect file type from stdin: %w", err)
+				}
+				filename = time.Now().Format("20060102-150405") + ext
+			}
+			r := strings.NewReader(string(content))
+			created, err := createReceiptWithFile(ctx, cmd, freeeapiClient, companyID, filename, r)
+			if err != nil {
+				return fmt.Errorf("create receipt with stdin: %w", err)
+			}
+			fmt.Fprintf(cmd.Writer, "%d\n", created.Id)
+			return nil
+		}
+
+		// Handle file inputs from specified file paths
 		for _, filePath := range filePathSlice {
 			f, err := os.Open(filePath)
 			if err != nil {
 				return fmt.Errorf("open file %s: %w", filePath, err)
 			}
-			created, err := createReceiptWithFile(ctx, cmd, freeeapiClient, companyID, path.Base(filePath), f)
+			filename := filenameFlag
+			if filename == "" {
+				filename = path.Base(filePath)
+			}
+			created, err := createReceiptWithFile(ctx, cmd, freeeapiClient, companyID, filename, f)
 			if err != nil {
 				f.Close()
 				return fmt.Errorf("create receipt with file %s: %w", filePath, err)
 			}
+			f.Close()
 			fmt.Fprintf(cmd.Writer, "%d\n", created.Id) // Render created receipt ID
 		}
 		return nil
@@ -283,6 +318,10 @@ var cmdReceiptCreate = &cli.Command{
 // - ReceiptMetadatumIssueDate    発行日 (yyyy-mm-dd)
 // - ReceiptMetadatumPartnerName  発行元
 var (
+	flagReceiptCreateFilename = &cli.StringFlag{
+		Name:  "filename",
+		Usage: "証憑ファイル名（単一ファイルまたは標準入力の場合のみ指定可能）",
+	}
 	flagReceiptCreateDescription = &cli.StringFlag{
 		Name:  "description",
 		Usage: "証憑のメモ (255文字以内)",
@@ -407,4 +446,22 @@ func createReceiptWithFile(
 		return ptr(resp.JSON201.Receipt), nil
 	}
 	return nil, fmt.Errorf("got unexpected response: %s", resp.Status())
+}
+
+var ErrUnSupportedFileType = fmt.Errorf("unsupported file type")
+
+// detectExt detects file extension from content bytes.
+// Currently supports JPEG, PNG, PDF.
+// Returns ErrUnSupportedFileType if the file type is not supported.
+func detectExt(content []byte) (string, error) {
+	contentType := http.DetectContentType(content)
+	switch contentType {
+	case "image/jpeg":
+		return ".jpg", nil
+	case "image/png":
+		return ".png", nil
+	case "application/pdf":
+		return ".pdf", nil
+	}
+	return "", ErrUnSupportedFileType
 }
