@@ -31,7 +31,7 @@ var app = &cli.Command{
 	Commands: []*cli.Command{
 		cmdReceiptsList,
 		cmdReceiptShow,
-		cmdReceiptCreate,
+		cmdReceiptUpload,
 
 		cmdCompaniesList,
 		{

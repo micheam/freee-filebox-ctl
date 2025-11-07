@@ -231,19 +231,19 @@ var cmdReceiptShow = &cli.Command{
 	},
 }
 
-var cmdReceiptCreate = &cli.Command{
+var cmdReceiptUpload = &cli.Command{
 	Category:  "receipts",
-	Name:      "create",
-	Usage:     "証憑ファイルを新規作成します",
+	Name:      "upload",
+	Usage:     "証憑ファイルをアップロードして登録します",
 	ArgsUsage: "[file_path...]",
 	Flags: []cli.Flag{
-		flagReceiptCreateFilename,
-		flagReceiptCreateDescription,
-		flagReceiptCreateDocumentType,
-		flagReceiptCreateQualifiedInvoice,
-		flagReceiptCreateReceiptMetadatumAmount,
-		flagReceiptCreateReceiptMetadatumIssueDate,
-		flagReceiptCreateReceiptMetadatumPartnerName,
+		flagReceiptUploadFilename,
+		flagReceiptUploadDescription,
+		flagReceiptUploadDocumentType,
+		flagReceiptUploadQualifiedInvoice,
+		flagReceiptUploadReceiptMetadatumAmount,
+		flagReceiptUploadReceiptMetadatumIssueDate,
+		flagReceiptUploadReceiptMetadatumPartnerName,
 	},
 	Before: loadAppConfig,
 	Action: func(ctx context.Context, cmd *cli.Command) error {
@@ -259,7 +259,7 @@ var cmdReceiptCreate = &cli.Command{
 		if len(filePathSlice) == 0 {
 			return fmt.Errorf("登録するファイルのパスを指定してください")
 		}
-		filenameFlag := cmd.String(flagReceiptCreateFilename.Name)
+		filenameFlag := cmd.String(flagReceiptUploadFilename.Name)
 		if filenameFlag != "" && filePathSlice[0] != "-" && len(filePathSlice) > 1 {
 			return fmt.Errorf("--filename は単一ファイルまたは標準入力の場合のみ指定可能です")
 		}
@@ -279,7 +279,7 @@ var cmdReceiptCreate = &cli.Command{
 				filename = time.Now().Format("20060102-150405") + ext
 			}
 			r := strings.NewReader(string(content))
-			created, err := createReceiptWithFile(ctx, cmd, freeeapiClient, companyID, filename, r)
+			created, err := uploadReceipt(ctx, cmd, freeeapiClient, companyID, filename, r)
 			if err != nil {
 				return fmt.Errorf("create receipt with stdin: %w", err)
 			}
@@ -297,7 +297,7 @@ var cmdReceiptCreate = &cli.Command{
 			if filename == "" {
 				filename = path.Base(filePath)
 			}
-			created, err := createReceiptWithFile(ctx, cmd, freeeapiClient, companyID, filename, f)
+			created, err := uploadReceipt(ctx, cmd, freeeapiClient, companyID, filename, f)
 			if err != nil {
 				f.Close()
 				return fmt.Errorf("create receipt with file %s: %w", filePath, err)
@@ -318,15 +318,15 @@ var cmdReceiptCreate = &cli.Command{
 // - ReceiptMetadatumIssueDate    発行日 (yyyy-mm-dd)
 // - ReceiptMetadatumPartnerName  発行元
 var (
-	flagReceiptCreateFilename = &cli.StringFlag{
+	flagReceiptUploadFilename = &cli.StringFlag{
 		Name:  "filename",
 		Usage: "証憑ファイル名（単一ファイルまたは標準入力の場合のみ指定可能）",
 	}
-	flagReceiptCreateDescription = &cli.StringFlag{
+	flagReceiptUploadDescription = &cli.StringFlag{
 		Name:  "description",
 		Usage: "証憑のメモ (255文字以内)",
 	}
-	flagReceiptCreateDocumentType = &cli.StringFlag{
+	flagReceiptUploadDocumentType = &cli.StringFlag{
 		Name:  "document-type",
 		Usage: "書類の種類（receipt、invoice、other）",
 		Validator: func(in string) error {
@@ -338,7 +338,7 @@ var (
 			}
 		},
 	}
-	flagReceiptCreateQualifiedInvoice = &cli.StringFlag{
+	flagReceiptUploadQualifiedInvoice = &cli.StringFlag{
 		Name:  "qualified-invoice",
 		Usage: "適格請求書等（qualified、not_qualified、unselected）",
 		Validator: func(in string) error {
@@ -350,11 +350,11 @@ var (
 			}
 		},
 	}
-	flagReceiptCreateReceiptMetadatumAmount = &cli.UintFlag{
+	flagReceiptUploadReceiptMetadatumAmount = &cli.UintFlag{
 		Name:  "amount",
 		Usage: "証憑の金額",
 	}
-	flagReceiptCreateReceiptMetadatumIssueDate = &cli.StringFlag{
+	flagReceiptUploadReceiptMetadatumIssueDate = &cli.StringFlag{
 		Name:  "issue-date",
 		Usage: "証憑の発行日 (yyyy-mm-dd)",
 		Validator: func(in string) error { // make sure the date is valid time.DateOnly format
@@ -368,17 +368,17 @@ var (
 			return nil
 		},
 	}
-	flagReceiptCreateReceiptMetadatumPartnerName = &cli.StringFlag{
+	flagReceiptUploadReceiptMetadatumPartnerName = &cli.StringFlag{
 		Name:  "partner-name",
 		Usage: "証憑の発行元",
 	}
 )
 
-func parseReceiptCreateDescriptionFlags(cmd *cli.Command, params *freeeapigen.ReceiptCreateParams) error {
-	if v := cmd.String(flagReceiptCreateDescription.Name); v != "" {
+func parseReceiptUploadFlags(cmd *cli.Command, params *freeeapigen.ReceiptCreateParams) error {
+	if v := cmd.String(flagReceiptUploadDescription.Name); v != "" {
 		params.Description = ptr(v)
 	}
-	if v := cmd.String(flagReceiptCreateDocumentType.Name); v != "" {
+	if v := cmd.String(flagReceiptUploadDocumentType.Name); v != "" {
 		switch v {
 		case "receipt":
 			params.DocumentType = ptr(freeeapigen.ReceiptCreateParamsDocumentTypeReceipt)
@@ -390,7 +390,7 @@ func parseReceiptCreateDescriptionFlags(cmd *cli.Command, params *freeeapigen.Re
 			return fmt.Errorf("invalid document-type: %s", v)
 		}
 	}
-	if v := cmd.String(flagReceiptCreateQualifiedInvoice.Name); v != "" {
+	if v := cmd.String(flagReceiptUploadQualifiedInvoice.Name); v != "" {
 		switch v {
 		case "qualified":
 			params.QualifiedInvoice = ptr(freeeapigen.ReceiptCreateParamsQualifiedInvoiceQualified)
@@ -402,21 +402,21 @@ func parseReceiptCreateDescriptionFlags(cmd *cli.Command, params *freeeapigen.Re
 			return fmt.Errorf("invalid qualified-invoice: %s", v)
 		}
 	}
-	if v := cmd.Int(flagReceiptCreateReceiptMetadatumAmount.Name); v != 0 {
+	if v := cmd.Int(flagReceiptUploadReceiptMetadatumAmount.Name); v != 0 {
 		params.ReceiptMetadatumAmount = ptr(int64(v))
 	}
-	if v := cmd.String(flagReceiptCreateReceiptMetadatumIssueDate.Name); v != "" {
+	if v := cmd.String(flagReceiptUploadReceiptMetadatumIssueDate.Name); v != "" {
 		params.ReceiptMetadatumIssueDate = ptr(v)
 	}
-	if v := cmd.String(flagReceiptCreateReceiptMetadatumPartnerName.Name); v != "" {
+	if v := cmd.String(flagReceiptUploadReceiptMetadatumPartnerName.Name); v != "" {
 		params.ReceiptMetadatumPartnerName = ptr(v)
 	}
 	return nil
 }
 
-// createReceiptWithFile is a helper function to create a receipt with given file path
+// uploadReceipt is a helper function to create a receipt with given file path
 // and return the created Receipt object.
-func createReceiptWithFile(
+func uploadReceipt(
 	ctx context.Context,
 	cmd *cli.Command,
 	apiClient *freeeapi.Client,
@@ -428,7 +428,7 @@ func createReceiptWithFile(
 	if err != nil {
 		return nil, fmt.Errorf("create receipt params: %w", err)
 	}
-	if err := parseReceiptCreateDescriptionFlags(cmd, params); err != nil {
+	if err := parseReceiptUploadFlags(cmd, params); err != nil {
 		return nil, err
 	}
 
