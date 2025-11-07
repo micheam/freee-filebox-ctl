@@ -7,7 +7,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
+	"runtime"
 	"strings"
 	"time"
 
@@ -169,17 +171,13 @@ var cmdReceiptShow = &cli.Command{
 			Usage: "出力フォーマット (table, json)",
 			Value: "table",
 		},
+		&cli.BoolFlag{
+			Name:  "web",
+			Usage: "open the receipt in a web browser",
+		},
 	},
 	Before: loadAppConfig,
 	Action: func(ctx context.Context, cmd *cli.Command) error {
-		companyID, err := detectCompanyID(ctx, cmd)
-		if err != nil {
-			return err
-		}
-		freeeapiClient, err := prepareFreeeAPIClient(ctx, cmd)
-		if err != nil {
-			return err
-		}
 		rawIDs := cmd.Args().Slice()
 		if len(rawIDs) == 0 {
 			return fmt.Errorf("please specify at least one receipt ID")
@@ -192,6 +190,26 @@ var cmdReceiptShow = &cli.Command{
 				return fmt.Errorf("invalid receipt ID[%d]: %w", i, err)
 			}
 			ids = append(ids, id)
+		}
+
+		// If --web flag is set, open the receipts in a web browser
+		if cmd.Bool("web") {
+			for _, id := range ids {
+				url := fmt.Sprintf("https://secure.freee.co.jp/receipts/%d", id)
+				if err := openBrowser(url); err != nil {
+					return fmt.Errorf("open browser for receipt ID %d: %w", id, err)
+				}
+			}
+			return nil
+		}
+
+		companyID, err := detectCompanyID(ctx, cmd)
+		if err != nil {
+			return err
+		}
+		freeeapiClient, err := prepareFreeeAPIClient(ctx, cmd)
+		if err != nil {
+			return err
 		}
 
 		format := cmd.String("format")
@@ -464,4 +482,22 @@ func detectExt(content []byte) (string, error) {
 		return ".pdf", nil
 	}
 	return "", ErrUnSupportedFileType
+}
+
+// openBrowser opens the specified URL in the default browser
+func openBrowser(url string) error {
+	var cmd *exec.Cmd
+
+	switch runtime.GOOS {
+	case "linux":
+		cmd = exec.Command("xdg-open", url)
+	case "windows":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	case "darwin":
+		cmd = exec.Command("open", url)
+	default:
+		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+	}
+
+	return cmd.Start()
 }
