@@ -41,6 +41,45 @@ GLOBAL OPTIONS:
    --version, -v           print the version
 ```
 
+### 実行例
+
+```console
+$ # 登録済みの証憑一覧を確認
+$ ffbox list \
+    --format=table \
+    --created-start='2025-11-01' \
+    --created-end='2025-11-20' \
+    --limit=10 \
+    --fields=id,status,created_at,receipt_metadatum.issue_date,receipt_metadatum.partner_name
+┌───────────┬───────────┬─────────────────────┬────────────┬─────────────────┐
+│    ID     │  STATUS   │     CREATED AT      │ ISSUE DATE │     PARTNER     │
+├───────────┼───────────┼─────────────────────┼────────────┼─────────────────┤
+│ 3*******3 │ ignored   │ 2025-11-07 16:36:38 │ (none)     │ (none)          │
+│ 3*******7 │ ignored   │ 2025-11-07 16:36:38 │ 2025-11-06 │ 株式会社COTEN   │
+│ 3*******9 │ confirmed │ 2025-11-07 19:39:10 │ 2025-10-31 │ Google Cloud    │
+│ 3*******5 │ confirmed │ 2025-11-07 19:42:39 │ 2025-11-02 │ Anthropic       │
+│ 3*******8 │ confirmed │ 2025-11-07 19:42:40 │ 2025-11-02 │ Anthropic       │
+│ 3*******9 │ confirmed │ 2025-11-07 19:44:58 │ 2025-10-12 │ DeepL SE        │
+│ 3*******2 │ confirmed │ 2025-11-07 19:45:02 │ 2025-10-09 │ Lulu Press, Inc │
+│ 3*******6 │ confirmed │ 2025-11-07 19:45:04 │ 2025-10-02 │ Anthropic       │
+│ 3*******8 │ confirmed │ 2025-11-07 19:45:05 │ 2025-10-02 │ Anthropic       │
+│ 3*******6 │ confirmed │ 2025-11-07 19:45:55 │ 2025-09-30 │ Google Cloud    │
+└───────────┴───────────┴─────────────────────┴────────────┴─────────────────┘
+
+$ # 証憑をアップロード
+$ ffbox upload $HOME/Downloads/recipt-9999-9999.pdf \
+    --issue-date=2025-11-10 \
+    --partner-name="株式会社XXXXX" \
+    --Downloads=recipt
+
+Uploaded receipt ID: 999999999
+
+$ # アップロードした証憑の情報を確認
+$ ffbox show 999999999 --format=table        # 登録結果を表形式で表示
+$ ffbox show 999999999 --format=json | jq .  # JSON形式で表示
+$ ffbox show 999999999 --web                 # freee会計のファイルボックス画面を開く
+```
+
 ## インストール
 
 ### go install を使用する場合
