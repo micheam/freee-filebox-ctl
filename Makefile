@@ -2,7 +2,7 @@ BIN_NAME = ffbox
 TARGET = bin/$(BIN_NAME)
 SOURCE = $(shell find . -name '*.go')
 INSTALL_PATH ?= /usr/local/bin
-SCHEMA_FILE = freeeapi/api-schema.json
+SCHEMA_FILE = internal/freeeapi/api-schema.json
 
 # Version detection: use git tag if available, otherwise DEVEL_${SHORT_HASH}
 GIT_TAG = $(shell git describe --tags --exact-match 2>/dev/null)
@@ -29,7 +29,7 @@ test : ## Run tests and vet the code
 
 latest-freeeapi-schema : ## Download and update the freee API schema
 	bash scripts/download-freeeapi-schema.sh -o $(SCHEMA_FILE)
-	cd freeeapi && go generate .
+	cd internal/freeeapi && go generate .
 
 version : ## Show the version that will be embedded in the binary
 	@echo $(VERSION)
