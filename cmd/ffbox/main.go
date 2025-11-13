@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/urfave/cli/v3"
 
@@ -105,12 +106,19 @@ func prepareFreeeAPIClient(ctx context.Context, cmd *cli.Command) (*freeeapi.Cli
 	if !cmd.IsSet(flagOauth2ClientID.Name) || !cmd.IsSet(flagOauth2ClientSecret.Name) {
 		return nil, fmt.Errorf("client-id and client-secret must be set")
 	}
+
+	tokenFilePath := appConfig.OAuth2.TokenFile
+	if !filepath.IsAbs(tokenFilePath) {
+		dir := filepath.Dir(config.ConfigPath())
+		tokenFilePath = filepath.Join(dir, tokenFilePath)
+	}
+
 	oauth2Config := oauth2kit.Config{
 		ClientID:     cmd.String(flagOauth2ClientID.Name),
 		ClientSecret: cmd.String(flagOauth2ClientSecret.Name),
 		Endpoint:     freeeapi.Oauth2Endpoint(),
 		Scopes:       []string{"read", "write"},
-		TokenFile:    appConfig.OAuth2.TokenFile,
+		TokenFile:    tokenFilePath,
 		LocalAddr:    appConfig.OAuth2.LocalAddr,
 	}
 	oauth2Mngr := &oauth2kit.Manager{
