@@ -146,3 +146,9 @@ local_addr = ":3485"       # OAuth2 コールバックサーバーのアドレ�
 ```
 
 > **注意**: `local_addr` のポート番号を変更した場合は、freee 側に登録した Redirect URI のポート番号も同じ値に変更してください。
+
+## License
+
+MIT License - see [LICENSE](LICENSE) file for details
+
+Copyright (c) 2025 Michito Maeda <michito.maeda@gmail.com>
