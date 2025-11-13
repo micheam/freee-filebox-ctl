@@ -6,7 +6,7 @@ import (
 
 	"golang.org/x/oauth2"
 
-	apigen "github.com/micheam/freee-filebox-ctl/freeeapi/gen"
+	apigen "github.com/micheam/freee-filebox-ctl/internal/freeeapi/gen"
 )
 
 var Oauth2Endpoint = func() oauth2.Endpoint {

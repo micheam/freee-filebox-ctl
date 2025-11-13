@@ -8,8 +8,8 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	freeeapi "github.com/micheam/freee-filebox-ctl/freeeapi"
 	"github.com/micheam/freee-filebox-ctl/internal/config"
+	freeeapi "github.com/micheam/freee-filebox-ctl/internal/freeeapi"
 
 	oauth2kit "github.com/micheam/go-oauth2kit"
 )

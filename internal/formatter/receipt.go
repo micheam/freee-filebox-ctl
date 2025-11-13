@@ -12,7 +12,7 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"github.com/olekukonko/tablewriter/tw"
 
-	freeeapigen "github.com/micheam/freee-filebox-ctl/freeeapi/gen"
+	freeeapigen "github.com/micheam/freee-filebox-ctl/internal/freeeapi/gen"
 )
 
 // Receipt formats a receipt in a human-readable format similar to `gh pr view`.

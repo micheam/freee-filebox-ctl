@@ -9,7 +9,7 @@ import (
 
 	"github.com/oapi-codegen/runtime/types"
 
-	"github.com/micheam/freee-filebox-ctl/freeeapi/gen"
+	"github.com/micheam/freee-filebox-ctl/internal/freeeapi/gen"
 )
 
 func NewReceiptCreateParams(companyID int64, filename string, r io.Reader) (*gen.ReceiptCreateParams, error) {

@@ -15,9 +15,9 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/micheam/freee-filebox-ctl/freeeapi"
-	freeeapigen "github.com/micheam/freee-filebox-ctl/freeeapi/gen"
 	"github.com/micheam/freee-filebox-ctl/internal/formatter"
+	"github.com/micheam/freee-filebox-ctl/internal/freeeapi"
+	freeeapigen "github.com/micheam/freee-filebox-ctl/internal/freeeapi/gen"
 )
 
 var (
