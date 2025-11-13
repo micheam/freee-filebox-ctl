@@ -13,6 +13,34 @@ freee ファイルボックスをコマンドラインから操作するため�
 > コマンド体系、オプション、設定ファイルの形式などは予告なく変更される可能性があります。
 > ご使用の際には、くれぐれもご注意ください。
 
+## 使い方
+
+```console
+$ ffbox --help
+NAME:
+   ffbox - freee会計の ファイルボックス を操作します
+
+USAGE:
+   ffbox [global options] [command [command options]]
+
+COMMANDS:
+   companies  所属するfreee事業所の一覧を表示します
+   config     このアプリケーションの設定を管理します
+   help, h    Shows a list of commands or help for one command
+
+   receipts:
+     list    ファイルボックス（証憑ファイル）の一覧表示
+     show    指定したIDの証憑ファイルの情報を表示します
+     upload  証憑ファイルをアップロードして登録します
+
+GLOBAL OPTIONS:
+   --client-id string      OAuth2 Client ID [$FREEEAPI_OAUTH2_CLIENT_ID]
+   --client-secret string  OAuth2 Client Secret [$FREEEAPI_OAUTH2_CLIENT_SECRET]
+   --company-id string     freee 事業所ID [$FREEEAPI_COMPANY_ID]
+   --help, -h              show help
+   --version, -v           print the version
+```
+
 ## インストール
 
 ### go install を使用する場合
