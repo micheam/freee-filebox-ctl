@@ -70,7 +70,7 @@ $ # 証憑をアップロード
 $ ffbox upload $HOME/Downloads/recipt-9999-9999.pdf \
     --issue-date=2025-11-10 \
     --partner-name="株式会社XXXXX" \
-    --Downloads=recipt
+    --document-type=recipt
 
 Uploaded receipt ID: 999999999
 
